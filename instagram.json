@@ -1,0 +1,399 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Data pelanggan",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Nama"
+            },
+            {
+              "fieldLabel": "Nomor telepon",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "Akun sosmed",
+              "placeholder": "@grandivo"
+            },
+            {
+              "fieldLabel": "Persetujuan mention Instagram",
+              "fieldType": "checkbox",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Saya setuju username Instagram saya disebut dalam posting publik Grandivo."
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        112,
+        272
+      ],
+      "id": "230a8d0d-0a99-4abd-a471-3c76a346e034",
+      "name": "On form submission",
+      "webhookId": "48f04215-0dac-41b0-9b5f-8c9316529ee6"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1IjkCy5owbPzvMBffJwNv_d2T5s5Ukto5JjyQ0uNxzoE",
+          "mode": "list",
+          "cachedResultName": "Grandivo",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IjkCy5owbPzvMBffJwNv_d2T5s5Ukto5JjyQ0uNxzoE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IjkCy5owbPzvMBffJwNv_d2T5s5Ukto5JjyQ0uNxzoE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "No": "={{ '=ROW()-1' }}",
+            "Nama": "={{ $json.Nama }}",
+            "Sosmed": "={{ $json['Akun sosmed'] }}",
+            "Nomor Telpon": "={{ $json['Nomor telepon'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "No",
+              "displayName": "No",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nama",
+              "displayName": "Nama",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sosmed",
+              "displayName": "Sosmed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nomor Telpon",
+              "displayName": "Nomor Telpon",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED",
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        320,
+        272
+      ],
+      "id": "6c0705d0-5081-492b-86a4-bc2d4eb600c3",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Dju64zlDys0EJVsY",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst raw = String(input['Username Instagram'] ?? input['Akun sosmed'] ?? input.instagram_username ?? '').trim();\nconst username = raw.replace(/^@+/, '').toLowerCase();\n\nif (!/^[a-z0-9._]{1,30}$/.test(username)) {\n  throw new Error('Username Instagram tidak valid. Gunakan 1-30 karakter: huruf, angka, titik, atau underscore.');\n}\n\nconst consentRaw = input['Persetujuan mention Instagram'];\nconst consentText = Array.isArray(consentRaw)\n  ? consentRaw.join(' ').trim().toLowerCase()\n  : String(consentRaw ?? '').trim().toLowerCase();\nconst consent = consentRaw === true\n  || (Array.isArray(consentRaw) && consentRaw.length > 0)\n  || ['ya', 'yes', 'true', '1', 'setuju', 'on'].some((value) => consentText.includes(value));\n\nif (!consent) {\n  throw new Error('Persetujuan mention Instagram wajib diberikan sebelum posting.');\n}\n\nconst imageUrl = 'https://grandivo.com/wp-content/uploads/2025/09/GDV.jpg';\nconst caption = `Terima kasih @${username} sudah menjadi bagian dari Sobat Grandivo! 🎉\n\nTemukan gadget dan elektronik pilihanmu di grandivo.com.\n\n#Grandivo #SobatGrandivo`;\n\nreturn [{\n  json: {\n    ...input,\n    instagram_username: username,\n    instagram_handle: `@${username}`,\n    image_url: imageUrl,\n    caption,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        272
+      ],
+      "id": "1341f91d-6776-4367-adc3-bc5f220e6d76",
+      "name": "Siapkan Post Instagram"
+    },
+    {
+      "parameters": {
+        "url": "https://graph.instagram.com/v25.0/me",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "user_id,username"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        784,
+        272
+      ],
+      "id": "2dec54aa-adab-4af1-a636-41a659f3a49e",
+      "name": "Ambil Akun Instagram"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.instagram.com/v25.0/{{$json.user_id || $json.id}}/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ $('Siapkan Post Instagram').item.json.image_url }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $('Siapkan Post Instagram').item.json.caption }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1024,
+        272
+      ],
+      "id": "bbaf5229-6191-41b6-a647-c5aca68ebdca",
+      "name": "Buat Container Instagram"
+    },
+    {
+      "parameters": {
+        "amount": 8
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1264,
+        272
+      ],
+      "id": "b227a402-2709-4f8f-ba2a-8da9c0ecba88",
+      "name": "Tunggu Proses Media",
+      "webhookId": "c779583b-934b-47fd-ad0d-291564585bd3"
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.instagram.com/v25.0/{{$json.id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "status_code,status"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1504,
+        272
+      ],
+      "id": "6dcc291f-fe92-4c19-bb37-64fe1e2b9424",
+      "name": "Cek Status Container"
+    },
+    {
+      "parameters": {
+        "jsCode": "const status = $input.first().json;\nif (status.status_code !== 'FINISHED') {\n  throw new Error('Container Instagram belum siap. Status: ' + String(status.status_code ?? status.status ?? 'UNKNOWN') + '. Jalankan ulang setelah memeriksa URL gambar.');\n}\nreturn [{ json: status }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        272
+      ],
+      "id": "af6d59d3-f0d5-4233-9779-73465951fce6",
+      "name": "Pastikan Media Siap"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.instagram.com/v25.0/{{$('Ambil Akun Instagram').item.json.user_id || $('Ambil Akun Instagram').item.json.id}}/media_publish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('Buat Container Instagram').item.json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1984,
+        272
+      ],
+      "id": "ed9e44a1-846d-4534-a5c6-209f4cfa3184",
+      "name": "Publikasikan ke Instagram"
+    },
+    {
+      "parameters": {
+        "jsCode": "const published = $input.first().json;\nconst prepared = $('Siapkan Post Instagram').item.json;\nreturn [{\n  json: {\n    success: true,\n    instagram_media_id: published.id,\n    mentioned_username: '@' + prepared.instagram_username,\n    caption: prepared.caption,\n    published_at: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        272
+      ],
+      "id": "d2e6cde2-ba5d-4ef2-9942-cbd56deb6a5c",
+      "name": "Hasil Post Instagram"
+    }
+  ],
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Siapkan Post Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siapkan Post Instagram": {
+      "main": [
+        [
+          {
+            "node": "Ambil Akun Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ambil Akun Instagram": {
+      "main": [
+        [
+          {
+            "node": "Buat Container Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buat Container Instagram": {
+      "main": [
+        [
+          {
+            "node": "Tunggu Proses Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tunggu Proses Media": {
+      "main": [
+        [
+          {
+            "node": "Cek Status Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek Status Container": {
+      "main": [
+        [
+          {
+            "node": "Pastikan Media Siap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pastikan Media Siap": {
+      "main": [
+        [
+          {
+            "node": "Publikasikan ke Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publikasikan ke Instagram": {
+      "main": [
+        [
+          {
+            "node": "Hasil Post Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a612ce3732177191df67c49cdd165a9944332142dec2e0997de31bff5658a964"
+  }
+}

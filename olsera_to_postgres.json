@@ -1,0 +1,164 @@
+{
+  "name": "Olsera to PostgreSQL Sync Workflow - Grandivo",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "id": "c1a2b3c4-0001-4000-8000-000000000001",
+      "name": "Jadwal Jam 12 Malam"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api-v1.olsera.com/v1/en/products.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        480,
+        300
+      ],
+      "id": "c1a2b3c4-0002-4000-8000-000000000002",
+      "name": "Ambil Data Produk Olsera",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "olseraApiHeaderAuth",
+          "name": "Olsera API Header Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\n\n// Handle format array produk Olsera (response.data, response.products, atau response langsung array)\nconst items = Array.isArray(response) \n  ? response \n  : (response.data || response.products || response.items || []);\n\nif (!items || items.length === 0) {\n  return [];\n}\n\nreturn items.map((product) => {\n  // Normalisasi & pemetaan field dari Olsera POS ke skema PostgreSQL Grandivo Store\n  const olseraId = String(product.id || product.product_id || '').trim();\n  const name = String(product.name || product.title || '').trim();\n  const sku = String(product.sku || product.barcode || olseraId).trim();\n  const price = parseFloat(product.sell_price || product.price || product.variant_price || 0);\n  const buyPrice = parseFloat(product.buy_price || product.cost_price || 0);\n  const stock = parseInt(product.stock || product.total_stock || product.qty || 0, 10);\n  const weight = parseFloat(product.weight || product.weight_gram || 0);\n  const description = String(product.description || product.note || '').trim();\n  const category = String(product.category_name || product.category || 'Umum').trim();\n  const brand = String(product.brand_name || product.brand || 'Grandivo').trim();\n  const imageUrl = String(product.photo || product.image_url || product.picture || '').trim();\n  const isActive = product.is_active !== undefined ? Boolean(product.is_active) : true;\n\n  return {\n    json: {\n      olsera_id: olseraId,\n      name: name,\n      sku: sku,\n      price: price,\n      buy_price: buyPrice,\n      stock: stock,\n      weight: weight,\n      description: description,\n      category: category,\n      brand: brand,\n      image_url: imageUrl,\n      is_active: isActive,\n      synced_at: new Date().toISOString()\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "id": "c1a2b3c4-0003-4000-8000-000000000003",
+      "name": "Transform & Map Data Produk"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO products (\n  olsera_id, \n  name, \n  sku, \n  price, \n  buy_price, \n  stock, \n  weight, \n  description, \n  category, \n  brand, \n  image_url, \n  is_active, \n  updated_at\n) VALUES (\n  '{{ $json.olsera_id }}',\n  '{{ $json.name.replace(/'/g, \"''\") }}',\n  '{{ $json.sku.replace(/'/g, \"''\") }}',\n  {{ $json.price }},\n  {{ $json.buy_price }},\n  {{ $json.stock }},\n  {{ $json.weight }},\n  '{{ $json.description.replace(/'/g, \"''\") }}',\n  '{{ $json.category.replace(/'/g, \"''\") }}',\n  '{{ $json.brand.replace(/'/g, \"''\") }}',\n  '{{ $json.image_url.replace(/'/g, \"''\") }}',\n  {{ $json.is_active }},\n  NOW()\n)\nON CONFLICT (olsera_id) DO UPDATE SET\n  name = EXCLUDED.name,\n  sku = EXCLUDED.sku,\n  price = EXCLUDED.price,\n  buy_price = EXCLUDED.buy_price,\n  stock = EXCLUDED.stock,\n  weight = EXCLUDED.weight,\n  description = EXCLUDED.description,\n  category = EXCLUDED.category,\n  brand = EXCLUDED.brand,\n  image_url = EXCLUDED.image_url,\n  is_active = EXCLUDED.is_active,\n  updated_at = NOW();",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        960,
+        300
+      ],
+      "id": "c1a2b3c4-0004-4000-8000-000000000004",
+      "name": "Simpan ke Database PostgreSQL",
+      "credentials": {
+        "postgres": {
+          "id": "grandivoPostgresDb",
+          "name": "Grandivo PostgreSQL Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const totalSynced = $input.all().length;\nconst timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\n\nreturn [{\n  json: {\n    status: 'SUCCESS',\n    message: `Berhasil sinkronisasi ${totalSynced} produk dari Olsera ke PostgreSQL.`,\n    total_synced: totalSynced,\n    synced_at_wib: timestamp\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ],
+      "id": "c1a2b3c4-0005-4000-8000-000000000005",
+      "name": "Log Hasil Sync"
+    }
+  ],
+  "connections": {
+    "Jadwal Jam 12 Malam": {
+      "main": [
+        [
+          {
+            "node": "Ambil Data Produk Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ambil Data Produk Olsera": {
+      "main": [
+        [
+          {
+            "node": "Transform & Map Data Produk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform & Map Data Produk": {
+      "main": [
+        [
+          {
+            "node": "Simpan ke Database PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simpan ke Database PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Log Hasil Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-08-05T12:00:00.000Z",
+  "versionId": "b8f9a2e1-4c3d-4e5f-8a9b-0c1d2e3f4a5b"
+}
