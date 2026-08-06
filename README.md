@@ -75,6 +75,8 @@ POSTGRES_IMAGE=postgres:16-alpine
 
 `products.sql` hanya otomatis dijalankan ketika volume PostgreSQL masih kosong. Perubahan skema setelah database pernah dibuat harus dijalankan sebagai migration atau dieksekusi manual.
 
+Stack ini memakai local named volume. Pada Swarm dengan lebih dari satu node, pin service PostgreSQL ke node penyimpanan menggunakan node label atau gunakan shared storage. Tanpa itu, reschedule ke node lain dapat membuat service melihat volume kosong yang berbeda.
+
 ### Hubungkan stack n8n
 
 Tambahkan external network berikut pada stack n8n:
@@ -163,6 +165,8 @@ Perubahan keamanan pada workflow:
 - timestamp consent ikut disimpan;
 - credential ID, webhook ID, cached URL, dan instance ID tidak disimpan di repository;
 - request API memiliki retry terbatas.
+
+Workflow masih memublikasikan otomatis setelah data dan consent lolos validasi. Bila tim Grandivo memerlukan pemeriksaan caption atau gambar oleh admin, tambahkan approval step sebelum node **Publikasikan ke Instagram**.
 
 ## Backup minimum
 
