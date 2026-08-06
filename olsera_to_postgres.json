@@ -1,13 +1,11 @@
 {
+  "name": "Olsera to PostgreSQL Sync Workflow - Grandivo",
   "nodes": [
     {
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        144,
-        96
-      ],
+      "position": [80, 80],
       "id": "06b0e920-0751-4af0-b26e-5abf1fc8aa1b",
       "name": "Jalankan Manual untuk Pengujian"
     },
@@ -24,24 +22,38 @@
       },
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        144,
-        288
-      ],
+      "position": [80, 280],
       "id": "394cdf9e-7168-468d-982d-1b2be2beaac2",
       "name": "Jadwal Jam 12 Malam WIB"
     },
     {
       "parameters": {
-        "url": "https://api-open.olsera.co.id/",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "https://api-open.olsera.co.id/api/open-api/v1/id/token",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Accept",
               "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "app_id",
+              "value": "={{ $env.OLSERA_APP_ID }}"
+            },
+            {
+              "name": "secret_key",
+              "value": "={{ $env.OLSERA_SECRET_KEY }}"
+            },
+            {
+              "name": "grant_type",
+              "value": "secret_key"
             }
           ]
         },
@@ -53,22 +65,69 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [
-        416,
-        192
-      ],
+      "position": [336, 180],
+      "id": "5ac82d02-0b56-48dd-aa8d-9ce66d52a42f",
+      "name": "Ambil Access Token Olsera",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "Mengambil access token baru pada setiap eksekusi menggunakan OLSERA_APP_ID dan OLSERA_SECRET_KEY dari environment stack n8n."
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\n\nconst accessToken =\n  response?.access_token ??\n  response?.data?.access_token ??\n  response?.result?.access_token ??\n  response?.token?.access_token ??\n  response?.data?.token;\n\nif (!accessToken || !String(accessToken).trim()) {\n  const safeKeys = Object.keys(response ?? {});\n  throw new Error(\n    `Access token tidak ditemukan pada respons Olsera. Field tingkat atas: ${safeKeys.join(', ') || '(kosong)'}.`\n  );\n}\n\nreturn [{\n  json: {\n    access_token: String(accessToken).trim(),\n    refresh_token:\n      response?.refresh_token ??\n      response?.data?.refresh_token ??\n      response?.result?.refresh_token ??\n      null,\n    expires_in:\n      response?.expires_in ??\n      response?.data?.expires_in ??\n      response?.result?.expires_in ??\n      null,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [576, 180],
+      "id": "d1224791-9ed9-49ce-958d-690ccba85e02",
+      "name": "Validasi Access Token Olsera",
+      "notes": "Mendukung respons token di top-level maupun di dalam data/result."
+    },
+    {
+      "parameters": {
+        "url": "https://api-open.olsera.co.id/api/open-api/v1/en/product",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "100"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('Validasi Access Token Olsera').first().json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [816, 180],
       "id": "e7b6a065-c389-43e4-be97-dc67e24569f7",
       "name": "Ambil Data Produk Olsera",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "38VHiYHMAp1xh0gX",
-          "name": "Olsera API Access Token"
-        }
-      },
-      "notes": "Pilih credential HTTP Header Auth milik Olsera setelah workflow diimpor. Uji output respons sebelum mengaktifkan jadwal."
+      "notes": "Header Authorization menggunakan access token hasil node sebelumnya tanpa awalan Bearer, sesuai dokumentasi Olsera Open API."
     },
     {
       "parameters": {
@@ -76,10 +135,7 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        672,
-        192
-      ],
+      "position": [1056, 180],
       "id": "c109fac1-e5d1-4d07-a170-b9c0db096714",
       "name": "Validasi & Map Produk",
       "notes": "Node ini sengaja gagal jika format respons tidak dikenali, daftar produk kosong, atau id/nama produk tidak tersedia."
@@ -94,22 +150,13 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        928,
-        192
-      ],
+      "position": [1296, 180],
       "id": "dc587892-0f3c-4beb-9b0e-320f326b1778",
       "name": "Upsert Produk ke PostgreSQL",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000,
-      "credentials": {
-        "postgres": {
-          "id": "JbTcnqTJx6eqQEEu",
-          "name": "Postgres account"
-        }
-      },
-      "notes": "Pilih credential PostgreSQL Grandivo setelah workflow diimpor. Query menggunakan parameter $1-$14, bukan interpolasi SQL."
+      "notes": "Setelah import, pilih credential PostgreSQL Grandivo. Query menggunakan parameter $1-$14."
     },
     {
       "parameters": {
@@ -117,74 +164,42 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1184,
-        192
-      ],
+      "position": [1536, 180],
       "id": "06880be0-cefe-419b-8b64-2d578beec7a9",
       "name": "Ringkasan Hasil Sync"
     }
   ],
   "connections": {
     "Jalankan Manual untuk Pengujian": {
-      "main": [
-        [
-          {
-            "node": "Ambil Data Produk Olsera",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Ambil Access Token Olsera", "type": "main", "index": 0}]]
     },
     "Jadwal Jam 12 Malam WIB": {
-      "main": [
-        [
-          {
-            "node": "Ambil Data Produk Olsera",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Ambil Access Token Olsera", "type": "main", "index": 0}]]
+    },
+    "Ambil Access Token Olsera": {
+      "main": [[{"node": "Validasi Access Token Olsera", "type": "main", "index": 0}]]
+    },
+    "Validasi Access Token Olsera": {
+      "main": [[{"node": "Ambil Data Produk Olsera", "type": "main", "index": 0}]]
     },
     "Ambil Data Produk Olsera": {
-      "main": [
-        [
-          {
-            "node": "Validasi & Map Produk",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Validasi & Map Produk", "type": "main", "index": 0}]]
     },
     "Validasi & Map Produk": {
-      "main": [
-        [
-          {
-            "node": "Upsert Produk ke PostgreSQL",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Upsert Produk ke PostgreSQL", "type": "main", "index": 0}]]
     },
     "Upsert Produk ke PostgreSQL": {
-      "main": [
-        [
-          {
-            "node": "Ringkasan Hasil Sync",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Ringkasan Hasil Sync", "type": "main", "index": 0}]]
     }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
   },
   "pinData": {},
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "d3075d274d5ee04c5fbc805b736e2ca8882cbcc910eba56c5ce6f07eb3d47c30"
-  }
+    "templateCredsSetupCompleted": false
+  },
+  "active": false,
+  "tags": []
 }
