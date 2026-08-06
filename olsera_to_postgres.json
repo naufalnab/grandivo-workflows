@@ -1,15 +1,14 @@
 {
-  "name": "Olsera to PostgreSQL Sync Workflow - Grandivo",
   "nodes": [
     {
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        240,
-        180
+        144,
+        96
       ],
-      "id": "c1a2b3c4-0000-4000-8000-000000000000",
+      "id": "06b0e920-0751-4af0-b26e-5abf1fc8aa1b",
       "name": "Jalankan Manual untuk Pengujian"
     },
     {
@@ -26,16 +25,15 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        240,
-        360
+        144,
+        288
       ],
-      "id": "c1a2b3c4-0001-4000-8000-000000000001",
+      "id": "394cdf9e-7168-468d-982d-1b2be2beaac2",
       "name": "Jadwal Jam 12 Malam WIB"
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api-v1.olsera.com/v1/en/products.json",
+        "url": "https://api-open.olsera.co.id/",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -49,23 +47,27 @@
         },
         "options": {
           "response": {
-            "response": {
-              "fullResponse": false
-            }
+            "response": {}
           }
         }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        500,
-        270
+        416,
+        192
       ],
-      "id": "c1a2b3c4-0002-4000-8000-000000000002",
+      "id": "e7b6a065-c389-43e4-be97-dc67e24569f7",
       "name": "Ambil Data Produk Olsera",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "38VHiYHMAp1xh0gX",
+          "name": "Olsera API Access Token"
+        }
+      },
       "notes": "Pilih credential HTTP Header Auth milik Olsera setelah workflow diimpor. Uji output respons sebelum mengaktifkan jadwal."
     },
     {
@@ -75,10 +77,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        760,
-        270
+        672,
+        192
       ],
-      "id": "c1a2b3c4-0003-4000-8000-000000000003",
+      "id": "c109fac1-e5d1-4d07-a170-b9c0db096714",
       "name": "Validasi & Map Produk",
       "notes": "Node ini sengaja gagal jika format respons tidak dikenali, daftar produk kosong, atau id/nama produk tidak tersedia."
     },
@@ -93,14 +95,20 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1020,
-        270
+        928,
+        192
       ],
-      "id": "c1a2b3c4-0004-4000-8000-000000000004",
+      "id": "dc587892-0f3c-4beb-9b0e-320f326b1778",
       "name": "Upsert Produk ke PostgreSQL",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000,
+      "credentials": {
+        "postgres": {
+          "id": "JbTcnqTJx6eqQEEu",
+          "name": "Postgres account"
+        }
+      },
       "notes": "Pilih credential PostgreSQL Grandivo setelah workflow diimpor. Query menggunakan parameter $1-$14, bukan interpolasi SQL."
     },
     {
@@ -110,10 +118,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1280,
-        270
+        1184,
+        192
       ],
-      "id": "c1a2b3c4-0005-4000-8000-000000000005",
+      "id": "06880be0-cefe-419b-8b64-2d578beec7a9",
       "name": "Ringkasan Hasil Sync"
     }
   ],
@@ -174,12 +182,9 @@
       ]
     }
   },
-  "settings": {
-    "executionOrder": "v1",
-    "timezone": "Asia/Jakarta",
-    "saveManualExecutions": true
-  },
-  "staticData": null,
-  "tags": [],
-  "triggerCount": 0
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d3075d274d5ee04c5fbc805b736e2ca8882cbcc910eba56c5ce6f07eb3d47c30"
+  }
 }
