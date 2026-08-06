@@ -1,0 +1,8 @@
+# Snippet ini bukan stack mandiri.
+# Salin bagian environment ke service n8n yang sudah ada di Portainer.
+services:
+  n8n:
+    environment:
+      OLSERA_APP_ID: ${OLSERA_APP_ID}
+      OLSERA_SECRET_KEY: ${OLSERA_SECRET_KEY}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"

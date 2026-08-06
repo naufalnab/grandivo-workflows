@@ -7,28 +7,24 @@ Repositori ini berisi workflow n8n dan konfigurasi Docker Swarm untuk otomasi op
 - `stack-postgres.yml`: stack PostgreSQL untuk Portainer/Docker Swarm.
 - `products.sql`: skema database katalog produk Grandivo.
 - `olsera_to_postgres.json`: workflow sinkronisasi produk Olsera ke PostgreSQL.
+- `n8n-olsera-env-snippet.yml`: potongan environment untuk autentikasi Olsera pada stack n8n.
 - `instagram.json`: workflow validasi consent pelanggan dan publikasi Instagram.
 - `.env.example`: contoh variabel non-rahasia untuk stack PostgreSQL.
 
 ## 1. Menyiapkan PostgreSQL di Portainer
 
-Stack memakai:
-
-- volume persisten `grandivo_postgres_data`;
-- overlay network eksternal `grandivo_backend`;
-- Docker secret eksternal `grandivo_postgres_password`;
-- `products.sql` sebagai initialization script;
-- healthcheck `pg_isready`;
-- tanpa membuka port PostgreSQL ke internet.
+Stack memakai volume persisten `grandivo_postgres_data`, overlay network eksternal
+`grandivo_backend`, Docker secret `grandivo_postgres_password`, healthcheck
+`pg_isready`, dan tidak membuka port PostgreSQL ke internet.
 
 ### Buat overlay network
 
-Di Portainer, buka **Networks** lalu buat network:
+Di Portainer, buka **Networks** lalu buat:
 
 ```text
 Name: grandivo_backend
 Driver: overlay
-Attachable: aktif
+Enable manual container attachment: aktif
 ```
 
 Alternatif dari manager node:
@@ -46,24 +42,16 @@ Name: grandivo_postgres_password
 Value: password PostgreSQL yang kuat
 ```
 
-Alternatif dari manager node:
+Jangan menyimpan password di repository.
 
-```bash
-printf '%s' 'GANTI_DENGAN_PASSWORD_KUAT' | docker secret create grandivo_postgres_password -
-```
-
-Jangan menyimpan password di repository atau environment variable stack.
-
-### Deploy stack dari Git repository
+### Deploy stack PostgreSQL
 
 Di Portainer:
 
-1. Buka **Stacks** → **Add stack**.
-2. Pilih **Repository**.
-3. Masukkan repository ini dan branch yang akan digunakan.
-4. Isi **Compose path** dengan `stack-postgres.yml`.
-5. Tambahkan environment variables dari `.env.example` jika ingin mengganti nilai default.
-6. Deploy stack.
+1. Buka **Stacks** → **Add stack** → **Repository**.
+2. Masukkan repository ini dan branch `main`.
+3. Isi **Compose path** dengan `stack-postgres.yml`.
+4. Deploy stack.
 
 Nilai default:
 
@@ -73,50 +61,117 @@ POSTGRES_USER=grandivo_sync
 POSTGRES_IMAGE=postgres:16-alpine
 ```
 
-`products.sql` hanya otomatis dijalankan ketika volume PostgreSQL masih kosong. Perubahan skema setelah database pernah dibuat harus dijalankan sebagai migration atau dieksekusi manual.
+`products.sql` hanya otomatis dijalankan ketika volume PostgreSQL masih kosong.
+Perubahan skema berikutnya harus dijalankan sebagai migration atau dieksekusi manual.
 
-Stack ini memakai local named volume. Pada Swarm dengan lebih dari satu node, pin service PostgreSQL ke node penyimpanan menggunakan node label atau gunakan shared storage. Tanpa itu, reschedule ke node lain dapat membuat service melihat volume kosong yang berbeda.
+Pada Swarm multi-node, pin PostgreSQL ke node penyimpanan atau gunakan shared storage.
+Local named volume tidak otomatis berpindah antar-node.
 
-### Hubungkan stack n8n
+### Hubungkan n8n ke network PostgreSQL
 
-Tambahkan external network berikut pada stack n8n:
-
-```yaml
-networks:
-  grandivo_backend:
-    external: true
-```
-
-Lalu hubungkan service n8n ke network tersebut:
+Tambahkan external network pada stack n8n:
 
 ```yaml
 services:
   n8n:
     networks:
       - grandivo_backend
+
+networks:
+  grandivo_backend:
+    external: true
 ```
 
 Credential PostgreSQL di n8n:
 
 ```text
-Host: postgres
+Host: grandivo-db_postgres
 Port: 5432
 Database: grandivo
 User: grandivo_sync
 Password: nilai secret grandivo_postgres_password
-SSL: disable untuk koneksi internal overlay network
+SSL: disable
 ```
 
-Jika nama stack mengubah DNS service, gunakan nama service yang terlihat pada menu **Services** Portainer, biasanya `<nama-stack>_postgres`.
+Gunakan nama service yang tampil di menu **Services** Portainer bila berbeda.
 
-## 2. Import dan uji workflow Olsera
+## 2. Menyiapkan autentikasi Olsera
 
-1. Import `olsera_to_postgres.json` di n8n.
-2. Pada node **Ambil Data Produk Olsera**, pilih credential HTTP Header Auth Olsera.
-3. Pada node **Upsert Produk ke PostgreSQL**, pilih credential PostgreSQL Grandivo.
-4. Jangan aktifkan jadwal dahulu.
-5. Jalankan **Jalankan Manual untuk Pengujian**.
-6. Periksa output API Olsera dan hasil tabel:
+Workflow tidak lagi memakai access token statis. Setiap eksekusi akan:
+
+1. menukar `app_id` dan `secret_key` menjadi access token;
+2. memvalidasi access token;
+3. memakai token tersebut pada request Product List tanpa awalan `Bearer`.
+
+Tambahkan environment berikut pada service n8n. Potongan yang sama tersedia di
+`n8n-olsera-env-snippet.yml`.
+
+```yaml
+services:
+  n8n:
+    environment:
+      OLSERA_APP_ID: ${OLSERA_APP_ID}
+      OLSERA_SECRET_KEY: ${OLSERA_SECRET_KEY}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+```
+
+Di bagian **Environment variables** stack Portainer, isi:
+
+```text
+OLSERA_APP_ID=<app_id dari Olsera Console>
+OLSERA_SECRET_KEY=<secret_key dari Olsera Console>
+```
+
+Jangan menaruh nilainya di GitHub. Update/redeploy stack n8n setelah variabel ditambahkan.
+
+`N8N_BLOCK_ENV_ACCESS_IN_NODE=false` diperlukan karena workflow membaca
+`$env.OLSERA_APP_ID` dan `$env.OLSERA_SECRET_KEY` pada HTTP Request node.
+
+## 3. Import dan uji workflow Olsera
+
+1. Download atau salin `olsera_to_postgres.json`.
+2. Import ke n8n.
+3. Buka node **Upsert Produk ke PostgreSQL** dan pilih credential PostgreSQL Grandivo.
+4. Tidak perlu membuat credential Header Auth Olsera.
+5. Jangan aktifkan jadwal dahulu.
+6. Jalankan **Jalankan Manual untuk Pengujian**.
+
+Alur workflow:
+
+```text
+Manual/Schedule
+→ Ambil Access Token Olsera
+→ Validasi Access Token Olsera
+→ Ambil Data Produk Olsera
+→ Validasi & Map Produk
+→ Upsert Produk ke PostgreSQL
+→ Ringkasan Hasil Sync
+```
+
+Endpoint yang digunakan:
+
+```text
+POST https://api-open.olsera.co.id/api/open-api/v1/id/token
+GET  https://api-open.olsera.co.id/api/open-api/v1/en/product
+```
+
+Token request memakai multipart form-data:
+
+```text
+app_id
+secret_key
+grant_type=secret_key
+```
+
+Product List memakai:
+
+```text
+Authorization: <access_token>
+per_page=100
+page=1
+```
+
+Periksa hasil tabel:
 
 ```sql
 SELECT
@@ -132,49 +187,45 @@ ORDER BY updated_at DESC
 LIMIT 20;
 ```
 
-7. Jalankan workflow untuk kedua kalinya dan pastikan jumlah baris tidak berlipat.
-8. Setelah hasil benar, aktifkan workflow. Timezone workflow sudah diset ke `Asia/Jakarta` dan cron berjalan setiap pukul 00:00 WIB.
+Jalankan workflow dua kali dan pastikan jumlah baris tidak berlipat. Setelah hasil benar,
+aktifkan workflow. Timezone sudah `Asia/Jakarta` dan cron berjalan pukul 00:00 WIB.
 
-### Catatan pagination Olsera
+### Catatan pagination
 
-Dokumentasi publik endpoint Olsera tidak cukup jelas untuk memastikan format pagination. Sebelum produksi, periksa respons nyata akun Olsera Anda. Bila respons memiliki `current_page`, `total_pages`, `next_page`, atau URL halaman berikutnya, aktifkan pagination pada HTTP Request node. Jangan menganggap halaman pertama sebagai seluruh katalog.
+Workflow saat ini mengambil `page=1` dengan `per_page=100`. Setelah respons nyata berhasil,
+periksa metadata pagination Olsera. Bila katalog lebih dari 100 produk, workflow harus
+ditambah loop pagination sebelum digunakan sebagai sinkronisasi penuh.
 
-Workflow sengaja menghentikan proses ketika:
+Workflow sengaja gagal bila:
 
-- format respons tidak dikenali;
-- produk berjumlah nol;
+- access token tidak ditemukan;
+- format respons produk tidak dikenali;
+- jumlah produk nol;
 - produk tidak memiliki ID atau nama;
 - PostgreSQL tidak mengembalikan hasil upsert.
 
-Query PostgreSQL menggunakan parameter `$1` sampai `$14`, bukan interpolasi string.
+Query PostgreSQL menggunakan parameter `$1` sampai `$14`.
 
-## 3. Workflow Instagram
+## 4. Workflow Instagram
 
 Sebelum mengaktifkan `instagram.json`:
 
 1. Buat Google Sheet dengan kolom `Nama`, `Sosmed`, `Nomor Telepon`, `Consent`, dan `Consent At`.
 2. Ganti `REPLACE_WITH_GOOGLE_SHEET_ID`.
 3. Pilih credential Google Sheets dan HTTP Bearer Auth Instagram.
-4. Pastikan URL gambar dapat diakses publik tanpa login.
-5. Uji menggunakan akun Instagram pengujian terlebih dahulu.
+4. Pastikan URL gambar dapat diakses publik.
+5. Uji menggunakan akun Instagram pengujian.
 
-Perubahan keamanan pada workflow:
-
-- nomor telepon diperlakukan sebagai teks;
-- nama, nomor telepon, username, dan consent divalidasi sebelum disimpan;
-- timestamp consent ikut disimpan;
-- credential ID, webhook ID, cached URL, dan instance ID tidak disimpan di repository;
-- request API memiliki retry terbatas.
-
-Workflow masih memublikasikan otomatis setelah data dan consent lolos validasi. Bila tim Grandivo memerlukan pemeriksaan caption atau gambar oleh admin, tambahkan approval step sebelum node **Publikasikan ke Instagram**.
+Workflow masih memublikasikan otomatis setelah data dan consent lolos validasi. Tambahkan
+approval step bila tim Grandivo perlu memeriksa caption atau gambar terlebih dahulu.
 
 ## Backup minimum
 
-Sebelum menjadikan PostgreSQL sebagai sumber data produksi, siapkan backup terjadwal. Contoh backup manual dari manager node:
+Contoh backup manual dari manager node:
 
 ```bash
 docker exec -t "$(docker ps --filter name=_postgres --format '{{.ID}}' | head -n1)" \
   pg_dump -U grandivo_sync -d grandivo --format=custom > grandivo-$(date +%F).dump
 ```
 
-Simpan hasil backup di lokasi lain, bukan hanya pada node Docker yang sama.
+Simpan backup di lokasi lain, bukan hanya pada node Docker yang sama.
