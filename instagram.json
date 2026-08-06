@@ -1,4 +1,5 @@
 {
+  "name": "Instagram Mention Automation - Grandivo",
   "nodes": [
     {
       "parameters": {
@@ -6,15 +7,19 @@
         "formFields": {
           "values": [
             {
-              "fieldLabel": "Nama"
+              "fieldLabel": "Nama",
+              "requiredField": true
             },
             {
               "fieldLabel": "Nomor telepon",
-              "fieldType": "number"
+              "fieldType": "text",
+              "placeholder": "+6281234567890",
+              "requiredField": true
             },
             {
               "fieldLabel": "Akun sosmed",
-              "placeholder": "@grandivo"
+              "placeholder": "@grandivo",
+              "requiredField": true
             },
             {
               "fieldLabel": "Persetujuan mention Instagram",
@@ -39,45 +44,45 @@
         272
       ],
       "id": "230a8d0d-0a99-4abd-a471-3c76a346e034",
-      "name": "On form submission",
-      "webhookId": "48f04215-0dac-41b0-9b5f-8c9316529ee6"
+      "name": "On form submission"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconst name = String(input.Nama ?? input.name ?? '').trim();\nif (!name) {\n  throw new Error('Nama pelanggan wajib diisi.');\n}\n\nconst phoneRaw = String(input['Nomor telepon'] ?? input.phone ?? '').trim();\nconst phone = phoneRaw.replace(/[^\\d+]/g, '');\nif (!/^\\+?\\d{8,15}$/.test(phone)) {\n  throw new Error('Nomor telepon tidak valid. Gunakan 8-15 digit dan boleh diawali tanda +.');\n}\n\nconst rawUsername = String(\n  input['Username Instagram'] ?? input['Akun sosmed'] ?? input.instagram_username ?? ''\n).trim();\nconst username = rawUsername.replace(/^@+/, '').toLowerCase();\n\nif (!/^[a-z0-9._]{1,30}$/.test(username)) {\n  throw new Error(\n    'Username Instagram tidak valid. Gunakan 1-30 karakter: huruf, angka, titik, atau underscore.'\n  );\n}\n\nconst consentRaw = input['Persetujuan mention Instagram'];\nconst consentText = Array.isArray(consentRaw)\n  ? consentRaw.join(' ').trim().toLowerCase()\n  : String(consentRaw ?? '').trim().toLowerCase();\n\nconst consent = consentRaw === true\n  || (Array.isArray(consentRaw) && consentRaw.length > 0)\n  || ['ya', 'yes', 'true', '1', 'setuju', 'on'].some((value) => consentText.includes(value));\n\nif (!consent) {\n  throw new Error('Persetujuan mention Instagram wajib diberikan sebelum posting.');\n}\n\nconst consentAt = new Date().toISOString();\nconst imageUrl = 'https://grandivo.com/wp-content/uploads/2025/09/GDV.jpg';\nconst caption = `Terima kasih @${username} sudah menjadi bagian dari Sobat Grandivo! 🎉\n\nTemukan gadget dan elektronik pilihanmu di grandivo.com.\n\n#Grandivo #SobatGrandivo`;\n\nreturn [{\n  json: {\n    customer_name: name,\n    phone_number: phone,\n    instagram_username: username,\n    instagram_handle: `@${username}`,\n    consent: true,\n    consent_at: consentAt,\n    image_url: imageUrl,\n    caption,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        272
+      ],
+      "id": "1341f91d-6776-4367-adc3-bc5f220e6d76",
+      "name": "Validasi & Siapkan Post Instagram"
     },
     {
       "parameters": {
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "1IjkCy5owbPzvMBffJwNv_d2T5s5Ukto5JjyQ0uNxzoE",
-          "mode": "list",
-          "cachedResultName": "Grandivo",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IjkCy5owbPzvMBffJwNv_d2T5s5Ukto5JjyQ0uNxzoE/edit?usp=drivesdk"
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
         },
         "sheetName": {
           "__rl": true,
-          "value": "gid=0",
-          "mode": "list",
-          "cachedResultName": "Sheet1",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1IjkCy5owbPzvMBffJwNv_d2T5s5Ukto5JjyQ0uNxzoE/edit#gid=0"
+          "value": "Sheet1",
+          "mode": "name"
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "No": "={{ '=ROW()-1' }}",
-            "Nama": "={{ $json.Nama }}",
-            "Sosmed": "={{ $json['Akun sosmed'] }}",
-            "Nomor Telpon": "={{ $json['Nomor telepon'] }}"
+            "Nama": "={{ $json.customer_name }}",
+            "Sosmed": "={{ $json.instagram_handle }}",
+            "Nomor Telepon": "={{ $json.phone_number }}",
+            "Consent": "={{ $json.consent }}",
+            "Consent At": "={{ $json.consent_at }}"
           },
           "matchingColumns": [],
           "schema": [
-            {
-              "id": "No",
-              "displayName": "No",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
             {
               "id": "Nama",
               "displayName": "Nama",
@@ -85,8 +90,7 @@
               "defaultMatch": false,
               "display": true,
               "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
+              "canBeUsedToMatch": true
             },
             {
               "id": "Sosmed",
@@ -98,8 +102,26 @@
               "canBeUsedToMatch": true
             },
             {
-              "id": "Nomor Telpon",
-              "displayName": "Nomor Telpon",
+              "id": "Nomor Telepon",
+              "displayName": "Nomor Telepon",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Consent",
+              "displayName": "Consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Consent At",
+              "displayName": "Consent At",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -118,30 +140,12 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        320,
+        592,
         272
       ],
       "id": "6c0705d0-5081-492b-86a4-bc2d4eb600c3",
-      "name": "Append row in sheet",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "Dju64zlDys0EJVsY",
-          "name": "Google Sheets account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const input = $input.first().json;\nconst raw = String(input['Username Instagram'] ?? input['Akun sosmed'] ?? input.instagram_username ?? '').trim();\nconst username = raw.replace(/^@+/, '').toLowerCase();\n\nif (!/^[a-z0-9._]{1,30}$/.test(username)) {\n  throw new Error('Username Instagram tidak valid. Gunakan 1-30 karakter: huruf, angka, titik, atau underscore.');\n}\n\nconst consentRaw = input['Persetujuan mention Instagram'];\nconst consentText = Array.isArray(consentRaw)\n  ? consentRaw.join(' ').trim().toLowerCase()\n  : String(consentRaw ?? '').trim().toLowerCase();\nconst consent = consentRaw === true\n  || (Array.isArray(consentRaw) && consentRaw.length > 0)\n  || ['ya', 'yes', 'true', '1', 'setuju', 'on'].some((value) => consentText.includes(value));\n\nif (!consent) {\n  throw new Error('Persetujuan mention Instagram wajib diberikan sebelum posting.');\n}\n\nconst imageUrl = 'https://grandivo.com/wp-content/uploads/2025/09/GDV.jpg';\nconst caption = `Terima kasih @${username} sudah menjadi bagian dari Sobat Grandivo! 🎉\n\nTemukan gadget dan elektronik pilihanmu di grandivo.com.\n\n#Grandivo #SobatGrandivo`;\n\nreturn [{\n  json: {\n    ...input,\n    instagram_username: username,\n    instagram_handle: `@${username}`,\n    image_url: imageUrl,\n    caption,\n  },\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        544,
-        272
-      ],
-      "id": "1341f91d-6776-4367-adc3-bc5f220e6d76",
-      "name": "Siapkan Post Instagram"
+      "name": "Simpan Consent ke Google Sheets",
+      "notes": "Ganti Google Sheet ID dan pilih credential Google Sheets setelah workflow diimpor. Sheet harus memiliki kolom: Nama, Sosmed, Nomor Telepon, Consent, Consent At."
     },
     {
       "parameters": {
@@ -162,11 +166,14 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        784,
+        832,
         272
       ],
       "id": "2dec54aa-adab-4af1-a636-41a659f3a49e",
-      "name": "Ambil Akun Instagram"
+      "name": "Ambil Akun Instagram",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -179,11 +186,11 @@
           "parameters": [
             {
               "name": "image_url",
-              "value": "={{ $('Siapkan Post Instagram').item.json.image_url }}"
+              "value": "={{ $('Validasi & Siapkan Post Instagram').item.json.image_url }}"
             },
             {
               "name": "caption",
-              "value": "={{ $('Siapkan Post Instagram').item.json.caption }}"
+              "value": "={{ $('Validasi & Siapkan Post Instagram').item.json.caption }}"
             }
           ]
         },
@@ -192,25 +199,27 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        1024,
+        1072,
         272
       ],
       "id": "bbaf5229-6191-41b6-a647-c5aca68ebdca",
-      "name": "Buat Container Instagram"
+      "name": "Buat Container Instagram",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
-        "amount": 8
+        "amount": 15
       },
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        1264,
+        1312,
         272
       ],
       "id": "b227a402-2709-4f8f-ba2a-8da9c0ecba88",
-      "name": "Tunggu Proses Media",
-      "webhookId": "c779583b-934b-47fd-ad0d-291564585bd3"
+      "name": "Tunggu Proses Media"
     },
     {
       "parameters": {
@@ -231,20 +240,23 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        1504,
+        1552,
         272
       ],
       "id": "6dcc291f-fe92-4c19-bb37-64fe1e2b9424",
-      "name": "Cek Status Container"
+      "name": "Cek Status Container",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
-        "jsCode": "const status = $input.first().json;\nif (status.status_code !== 'FINISHED') {\n  throw new Error('Container Instagram belum siap. Status: ' + String(status.status_code ?? status.status ?? 'UNKNOWN') + '. Jalankan ulang setelah memeriksa URL gambar.');\n}\nreturn [{ json: status }];"
+        "jsCode": "const status = $input.first().json;\nif (status.status_code !== 'FINISHED') {\n  throw new Error(\n    'Container Instagram belum siap. Status: ' +\n    String(status.status_code ?? status.status ?? 'UNKNOWN') +\n    '. Periksa URL gambar dan jalankan ulang workflow.'\n  );\n}\nreturn [{ json: status }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1744,
+        1792,
         272
       ],
       "id": "af6d59d3-f0d5-4233-9779-73465951fce6",
@@ -270,20 +282,23 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        1984,
+        2032,
         272
       ],
       "id": "ed9e44a1-846d-4534-a5c6-209f4cfa3184",
-      "name": "Publikasikan ke Instagram"
+      "name": "Publikasikan ke Instagram",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
-        "jsCode": "const published = $input.first().json;\nconst prepared = $('Siapkan Post Instagram').item.json;\nreturn [{\n  json: {\n    success: true,\n    instagram_media_id: published.id,\n    mentioned_username: '@' + prepared.instagram_username,\n    caption: prepared.caption,\n    published_at: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const published = $input.first().json;\nconst prepared = $('Validasi & Siapkan Post Instagram').item.json;\n\nreturn [{\n  json: {\n    success: true,\n    instagram_media_id: published.id,\n    mentioned_username: prepared.instagram_handle,\n    caption: prepared.caption,\n    consent_at: prepared.consent_at,\n    published_at: new Date().toISOString(),\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2224,
+        2272,
         272
       ],
       "id": "d2e6cde2-ba5d-4ef2-9942-cbd56deb6a5c",
@@ -295,25 +310,25 @@
       "main": [
         [
           {
-            "node": "Append row in sheet",
+            "node": "Validasi & Siapkan Post Instagram",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Append row in sheet": {
+    "Validasi & Siapkan Post Instagram": {
       "main": [
         [
           {
-            "node": "Siapkan Post Instagram",
+            "node": "Simpan Consent ke Google Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Siapkan Post Instagram": {
+    "Simpan Consent ke Google Sheets": {
       "main": [
         [
           {
@@ -392,8 +407,8 @@
     }
   },
   "pinData": {},
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "a612ce3732177191df67c49cdd165a9944332142dec2e0997de31bff5658a964"
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
   }
 }

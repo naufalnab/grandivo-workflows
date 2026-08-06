@@ -1,0 +1,64 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-grandivo}
+      POSTGRES_USER: ${POSTGRES_USER:-grandivo_sync}
+      POSTGRES_PASSWORD_FILE: /run/secrets/grandivo_postgres_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: Asia/Jakarta
+    volumes:
+      - grandivo_postgres_data:/var/lib/postgresql/data
+    networks:
+      - grandivo_backend
+    secrets:
+      - grandivo_postgres_password
+    configs:
+      - source: grandivo_products_schema
+        target: /docker-entrypoint-initdb.d/001-products.sql
+        mode: 0444
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      resources:
+        reservations:
+          memory: 256M
+        limits:
+          memory: 1G
+
+networks:
+  grandivo_backend:
+    external: true
+
+volumes:
+  grandivo_postgres_data:
+
+secrets:
+  grandivo_postgres_password:
+    external: true
+
+configs:
+  grandivo_products_schema:
+    file: ./products.sql
