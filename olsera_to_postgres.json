@@ -2,6 +2,17 @@
   "name": "Olsera to PostgreSQL Sync Workflow - Grandivo",
   "nodes": [
     {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        180
+      ],
+      "id": "c1a2b3c4-0000-4000-8000-000000000000",
+      "name": "Jalankan Manual untuk Pengujian"
+    },
+    {
       "parameters": {
         "rule": {
           "interval": [
@@ -16,10 +27,10 @@
       "typeVersion": 1.2,
       "position": [
         240,
-        300
+        360
       ],
       "id": "c1a2b3c4-0001-4000-8000-000000000001",
-      "name": "Jadwal Jam 12 Malam"
+      "name": "Jadwal Jam 12 Malam WIB"
     },
     {
       "parameters": {
@@ -47,68 +58,78 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        480,
-        300
+        500,
+        270
       ],
       "id": "c1a2b3c4-0002-4000-8000-000000000002",
       "name": "Ambil Data Produk Olsera",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "olseraApiHeaderAuth",
-          "name": "Olsera API Header Credentials"
-        }
-      }
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "Pilih credential HTTP Header Auth milik Olsera setelah workflow diimpor. Uji output respons sebelum mengaktifkan jadwal."
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\n\n// Handle format array produk Olsera (response.data, response.products, atau response langsung array)\nconst items = Array.isArray(response) \n  ? response \n  : (response.data || response.products || response.items || []);\n\nif (!items || items.length === 0) {\n  return [];\n}\n\nreturn items.map((product) => {\n  // Normalisasi & pemetaan field dari Olsera POS ke skema PostgreSQL Grandivo Store\n  const olseraId = String(product.id || product.product_id || '').trim();\n  const name = String(product.name || product.title || '').trim();\n  const sku = String(product.sku || product.barcode || olseraId).trim();\n  const price = parseFloat(product.sell_price || product.price || product.variant_price || 0);\n  const buyPrice = parseFloat(product.buy_price || product.cost_price || 0);\n  const stock = parseInt(product.stock || product.total_stock || product.qty || 0, 10);\n  const weight = parseFloat(product.weight || product.weight_gram || 0);\n  const description = String(product.description || product.note || '').trim();\n  const category = String(product.category_name || product.category || 'Umum').trim();\n  const brand = String(product.brand_name || product.brand || 'Grandivo').trim();\n  const imageUrl = String(product.photo || product.image_url || product.picture || '').trim();\n  const isActive = product.is_active !== undefined ? Boolean(product.is_active) : true;\n\n  return {\n    json: {\n      olsera_id: olseraId,\n      name: name,\n      sku: sku,\n      price: price,\n      buy_price: buyPrice,\n      stock: stock,\n      weight: weight,\n      description: description,\n      category: category,\n      brand: brand,\n      image_url: imageUrl,\n      is_active: isActive,\n      synced_at: new Date().toISOString()\n    }\n  };\n});"
+        "jsCode": "const response = $input.first().json;\nconst syncStartedAt = new Date().toISOString();\n\nconst candidates = [\n  response,\n  response?.data,\n  response?.products,\n  response?.items,\n  response?.data?.data,\n  response?.data?.products,\n  response?.data?.items,\n];\n\nconst items = candidates.find((value) => Array.isArray(value));\n\nif (!items) {\n  throw new Error(\n    'Format respons Olsera belum dikenali. Periksa output node \"Ambil Data Produk Olsera\" lalu sesuaikan daftar candidates pada Code node.'\n  );\n}\n\nif (items.length === 0) {\n  throw new Error(\n    'Olsera mengembalikan 0 produk. Sinkronisasi dihentikan agar data kosong tidak dianggap sebagai hasil yang valid.'\n  );\n}\n\nconst firstDefined = (...values) =>\n  values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');\n\nconst toText = (...values) => {\n  const value = firstDefined(...values);\n  return value === undefined ? '' : String(value).trim();\n};\n\nconst toNumber = (value, fallback = 0) => {\n  if (value === undefined || value === null || value === '') return fallback;\n  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;\n\n  const raw = String(value).trim().replace(/\\s/g, '');\n  if (!raw) return fallback;\n\n  const commaIndex = raw.lastIndexOf(',');\n  const dotIndex = raw.lastIndexOf('.');\n  const normalized = commaIndex > dotIndex\n    ? raw.replace(/\\./g, '').replace(',', '.')\n    : raw.replace(/,/g, '');\n\n  const parsed = Number(normalized);\n  return Number.isFinite(parsed) ? parsed : fallback;\n};\n\nconst toBoolean = (value, fallback = true) => {\n  if (value === undefined || value === null || value === '') return fallback;\n  if (typeof value === 'boolean') return value;\n  if (typeof value === 'number') return value !== 0;\n\n  const normalized = String(value).trim().toLowerCase();\n  if (['false', '0', 'no', 'tidak', 'inactive', 'nonaktif'].includes(normalized)) return false;\n  if (['true', '1', 'yes', 'ya', 'active', 'aktif'].includes(normalized)) return true;\n  return fallback;\n};\n\nconst toIsoDateOrNull = (value) => {\n  if (value === undefined || value === null || value === '') return null;\n  const parsed = new Date(value);\n  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();\n};\n\nreturn items.map((product, index) => {\n  const olseraId = toText(product.id, product.product_id, product.productId);\n  const name = toText(product.name, product.title, product.product_name);\n\n  if (!olseraId || !name) {\n    throw new Error(\n      `Produk Olsera pada index ${index} tidak valid: id=\"${olseraId}\", name=\"${name}\".`\n    );\n  }\n\n  const sku = toText(product.sku, product.barcode, product.code);\n  const price = toNumber(firstDefined(product.sell_price, product.price, product.variant_price), 0);\n  const buyPrice = toNumber(firstDefined(product.buy_price, product.cost_price), 0);\n  const stock = Math.trunc(\n    toNumber(firstDefined(product.stock, product.total_stock, product.qty, product.quantity), 0)\n  );\n  const weight = toNumber(firstDefined(product.weight, product.weight_gram), 0);\n  const description = toText(product.description, product.note);\n  const category = toText(product.category_name, product.category, 'Umum');\n  const brand = toText(product.brand_name, product.brand, 'Grandivo');\n  const imageUrl = toText(\n    product.photo,\n    product.image_url,\n    product.picture,\n    product.image,\n    product.images?.[0]?.url,\n    product.images?.[0]\n  );\n  const isActive = toBoolean(\n    firstDefined(product.is_active, product.active, product.status),\n    true\n  );\n  const sourceUpdatedAt = toIsoDateOrNull(\n    firstDefined(product.updated_at, product.modified_at, product.last_update)\n  );\n\n  return {\n    json: {\n      olsera_id: olseraId,\n      name,\n      sku,\n      price,\n      buy_price: buyPrice,\n      stock,\n      weight,\n      description,\n      category,\n      brand,\n      image_url: imageUrl,\n      is_active: isActive,\n      source_updated_at: sourceUpdatedAt,\n      raw_payload: JSON.stringify(product),\n      sync_started_at: syncStartedAt,\n    },\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        720,
-        300
+        760,
+        270
       ],
       "id": "c1a2b3c4-0003-4000-8000-000000000003",
-      "name": "Transform & Map Data Produk"
+      "name": "Validasi & Map Produk",
+      "notes": "Node ini sengaja gagal jika format respons tidak dikenali, daftar produk kosong, atau id/nama produk tidak tersedia."
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO products (\n  olsera_id, \n  name, \n  sku, \n  price, \n  buy_price, \n  stock, \n  weight, \n  description, \n  category, \n  brand, \n  image_url, \n  is_active, \n  updated_at\n) VALUES (\n  '{{ $json.olsera_id }}',\n  '{{ $json.name.replace(/'/g, \"''\") }}',\n  '{{ $json.sku.replace(/'/g, \"''\") }}',\n  {{ $json.price }},\n  {{ $json.buy_price }},\n  {{ $json.stock }},\n  {{ $json.weight }},\n  '{{ $json.description.replace(/'/g, \"''\") }}',\n  '{{ $json.category.replace(/'/g, \"''\") }}',\n  '{{ $json.brand.replace(/'/g, \"''\") }}',\n  '{{ $json.image_url.replace(/'/g, \"''\") }}',\n  {{ $json.is_active }},\n  NOW()\n)\nON CONFLICT (olsera_id) DO UPDATE SET\n  name = EXCLUDED.name,\n  sku = EXCLUDED.sku,\n  price = EXCLUDED.price,\n  buy_price = EXCLUDED.buy_price,\n  stock = EXCLUDED.stock,\n  weight = EXCLUDED.weight,\n  description = EXCLUDED.description,\n  category = EXCLUDED.category,\n  brand = EXCLUDED.brand,\n  image_url = EXCLUDED.image_url,\n  is_active = EXCLUDED.is_active,\n  updated_at = NOW();",
-        "options": {}
+        "query": "INSERT INTO products (\n  olsera_id,\n  name,\n  sku,\n  price,\n  buy_price,\n  stock,\n  weight,\n  description,\n  category,\n  brand,\n  image_url,\n  is_active,\n  source_updated_at,\n  raw_payload,\n  last_seen_at,\n  synced_at,\n  updated_at\n) VALUES (\n  $1,\n  $2,\n  NULLIF($3, ''),\n  $4,\n  $5,\n  $6,\n  $7,\n  NULLIF($8, ''),\n  NULLIF($9, ''),\n  NULLIF($10, ''),\n  NULLIF($11, ''),\n  $12,\n  $13::timestamptz,\n  $14::jsonb,\n  NOW(),\n  NOW(),\n  NOW()\n)\nON CONFLICT (olsera_id) DO UPDATE SET\n  name = EXCLUDED.name,\n  sku = EXCLUDED.sku,\n  price = EXCLUDED.price,\n  buy_price = EXCLUDED.buy_price,\n  stock = EXCLUDED.stock,\n  weight = EXCLUDED.weight,\n  description = EXCLUDED.description,\n  category = EXCLUDED.category,\n  brand = EXCLUDED.brand,\n  image_url = EXCLUDED.image_url,\n  is_active = EXCLUDED.is_active,\n  source_updated_at = EXCLUDED.source_updated_at,\n  raw_payload = EXCLUDED.raw_payload,\n  last_seen_at = NOW(),\n  synced_at = NOW(),\n  updated_at = NOW()\nRETURNING olsera_id, name, synced_at;",
+        "options": {
+          "queryReplacement": "={{ [$json.olsera_id, $json.name, $json.sku, $json.price, $json.buy_price, $json.stock, $json.weight, $json.description, $json.category, $json.brand, $json.image_url, $json.is_active, $json.source_updated_at, $json.raw_payload] }}"
+        }
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        960,
-        300
+        1020,
+        270
       ],
       "id": "c1a2b3c4-0004-4000-8000-000000000004",
-      "name": "Simpan ke Database PostgreSQL",
-      "credentials": {
-        "postgres": {
-          "id": "grandivoPostgresDb",
-          "name": "Grandivo PostgreSQL Database"
-        }
-      }
+      "name": "Upsert Produk ke PostgreSQL",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Pilih credential PostgreSQL Grandivo setelah workflow diimpor. Query menggunakan parameter $1-$14, bukan interpolasi SQL."
     },
     {
       "parameters": {
-        "jsCode": "const totalSynced = $input.all().length;\nconst timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\n\nreturn [{\n  json: {\n    status: 'SUCCESS',\n    message: `Berhasil sinkronisasi ${totalSynced} produk dari Olsera ke PostgreSQL.`,\n    total_synced: totalSynced,\n    synced_at_wib: timestamp\n  }\n}];"
+        "jsCode": "const rows = $input.all();\nconst totalSynced = rows.length;\nconst timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\n\nif (totalSynced === 0) {\n  throw new Error('Tidak ada produk yang berhasil di-upsert ke PostgreSQL.');\n}\n\nreturn [{\n  json: {\n    status: 'SUCCESS',\n    message: `Berhasil sinkronisasi ${totalSynced} produk dari Olsera ke PostgreSQL.`,\n    total_synced: totalSynced,\n    synced_at_wib: timestamp,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1200,
-        300
+        1280,
+        270
       ],
       "id": "c1a2b3c4-0005-4000-8000-000000000005",
-      "name": "Log Hasil Sync"
+      "name": "Ringkasan Hasil Sync"
     }
   ],
   "connections": {
-    "Jadwal Jam 12 Malam": {
+    "Jalankan Manual untuk Pengujian": {
+      "main": [
+        [
+          {
+            "node": "Ambil Data Produk Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jadwal Jam 12 Malam WIB": {
       "main": [
         [
           {
@@ -123,29 +144,29 @@
       "main": [
         [
           {
-            "node": "Transform & Map Data Produk",
+            "node": "Validasi & Map Produk",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Transform & Map Data Produk": {
+    "Validasi & Map Produk": {
       "main": [
         [
           {
-            "node": "Simpan ke Database PostgreSQL",
+            "node": "Upsert Produk ke PostgreSQL",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Simpan ke Database PostgreSQL": {
+    "Upsert Produk ke PostgreSQL": {
       "main": [
         [
           {
-            "node": "Log Hasil Sync",
+            "node": "Ringkasan Hasil Sync",
             "type": "main",
             "index": 0
           }
@@ -154,11 +175,11 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta",
+    "saveManualExecutions": true
   },
   "staticData": null,
   "tags": [],
-  "triggerCount": 0,
-  "updatedAt": "2026-08-05T12:00:00.000Z",
-  "versionId": "b8f9a2e1-4c3d-4e5f-8a9b-0c1d2e3f4a5b"
+  "triggerCount": 0
 }
