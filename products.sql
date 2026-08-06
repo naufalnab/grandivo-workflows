@@ -28,6 +28,9 @@ ALTER TABLE products
     ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+-- The UNIQUE constraint on olsera_id already owns its own B-tree index.
+DROP INDEX IF EXISTS idx_products_olsera_id;
+
 CREATE INDEX IF NOT EXISTS idx_products_sku
     ON products (sku)
     WHERE sku IS NOT NULL AND sku <> '';
