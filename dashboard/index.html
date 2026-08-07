@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Grandivo Product Dashboard</title>
+  <style>
+    :root {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #172033;
+      background: #f4f6fb;
+      --panel: #ffffff;
+      --panel-2: #f8fafc;
+      --border: #e3e8f0;
+      --muted: #667085;
+      --text: #172033;
+      --accent: #6c5ce7;
+      --accent-soft: #eeebff;
+      --good: #16875d;
+      --warn: #b76e00;
+      --bad: #c23b3b;
+      --shadow: 0 16px 40px rgba(31, 41, 55, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #f4f6fb; color: var(--text); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .page { max-width: 1480px; margin: 0 auto; padding: 28px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .logo { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: white; font-weight: 800; letter-spacing: .04em; background: linear-gradient(135deg, #6c5ce7, #3e8ef7); box-shadow: var(--shadow); }
+    h1 { margin: 0; font-size: clamp(1.35rem, 2vw, 2rem); }
+    .subtitle { color: var(--muted); margin-top: 4px; font-size: .93rem; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 10px 14px; border-radius: 11px; font-weight: 650; box-shadow: 0 3px 10px rgba(31,41,55,.03); }
+    .btn:hover { border-color: #cbd3df; transform: translateY(-1px); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .status-line { display: flex; gap: 8px; align-items: center; font-size: .86rem; color: var(--muted); }
+    .dot { width: 9px; height: 9px; border-radius: 999px; background: #98a2b3; box-shadow: 0 0 0 4px rgba(152,162,179,.12); }
+    .dot.ok { background: var(--good); box-shadow: 0 0 0 4px rgba(22,135,93,.12); }
+    .dot.error { background: var(--bad); box-shadow: 0 0 0 4px rgba(194,59,59,.12); }
+    .stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin: 0 0 18px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 7px 24px rgba(31,41,55,.045); }
+    .stat-label { color: var(--muted); font-size: .82rem; font-weight: 650; }
+    .stat-value { margin-top: 7px; font-size: clamp(1.25rem, 2vw, 1.8rem); font-weight: 800; letter-spacing: -.03em; }
+    .stat-note { margin-top: 5px; color: var(--muted); font-size: .78rem; }
+    .toolbar { display: grid; grid-template-columns: 2fr repeat(4, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .control { width: 100%; border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 11px; padding: 10px 12px; outline: none; }
+    .control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,92,231,.12); }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+    .table-wrap { overflow: auto; max-height: 68vh; }
+    table { border-collapse: collapse; width: 100%; min-width: 1120px; }
+    thead { position: sticky; top: 0; z-index: 2; }
+    th { background: #f8fafc; color: #667085; text-transform: uppercase; letter-spacing: .055em; font-size: .71rem; text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 14px; border-bottom: 1px solid #edf0f5; font-size: .88rem; vertical-align: middle; }
+    tbody tr { transition: background .15s ease; }
+    tbody tr:hover { background: #fafbff; }
+    .product { display: flex; align-items: center; gap: 10px; min-width: 260px; }
+    .thumb { width: 42px; height: 42px; flex: 0 0 42px; object-fit: cover; border-radius: 9px; border: 1px solid var(--border); background: #f1f4f8; }
+    .thumb.placeholder { display: grid; place-items: center; color: #98a2b3; font-size: 11px; }
+    .name { font-weight: 700; line-height: 1.3; }
+    .small { color: var(--muted); font-size: .78rem; margin-top: 3px; }
+    .money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 9px; font-size: .75rem; font-weight: 700; }
+    .badge.active { background: #e9f8f1; color: var(--good); }
+    .badge.inactive { background: #fcecec; color: var(--bad); }
+    .badge.low { background: #fff5dc; color: var(--warn); }
+    .badge.out { background: #fcecec; color: var(--bad); }
+    .link-btn { background: transparent; border: none; color: var(--accent); font-weight: 700; padding: 0; }
+    .pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; color: var(--muted); font-size: .85rem; }
+    .pager-actions { display: flex; align-items: center; gap: 8px; }
+    .empty { padding: 54px 18px; text-align: center; color: var(--muted); }
+    .error-box { display: none; margin-bottom: 14px; border: 1px solid #f2bbbb; color: #8e2b2b; background: #fff2f2; border-radius: 12px; padding: 12px 14px; white-space: pre-wrap; }
+    dialog { border: 0; border-radius: 18px; width: min(860px, calc(100vw - 32px)); max-height: 88vh; padding: 0; color: var(--text); background: var(--panel); box-shadow: 0 24px 80px rgba(15,23,42,.28); }
+    dialog::backdrop { background: rgba(15,23,42,.55); backdrop-filter: blur(3px); }
+    .modal-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px; border-bottom: 1px solid var(--border); }
+    .modal-body { padding: 20px; overflow: auto; max-height: 70vh; }
+    .modal-title { font-size: 1.15rem; font-weight: 800; }
+    .close { border: 1px solid var(--border); background: var(--panel-2); width: 36px; height: 36px; border-radius: 10px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+    .detail { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+    .detail .k { color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .045em; }
+    .detail .v { margin-top: 5px; font-size: .9rem; word-break: break-word; }
+    .description { margin-top: 14px; padding: 14px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border); line-height: 1.55; white-space: pre-wrap; }
+    pre { margin: 14px 0 0; border-radius: 12px; padding: 14px; overflow: auto; background: #111827; color: #d1e8ff; font-size: .78rem; line-height: 1.55; max-height: 360px; }
+    @media (max-width: 1100px) {
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .toolbar { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 680px) {
+      .page { padding: 16px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .toolbar { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .actions { width: 100%; }
+      .actions .btn { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">G</div>
+        <div>
+          <h1>Grandivo Product Dashboard</h1>
+          <div class="subtitle">Data produk hasil sinkronisasi Olsera → PostgreSQL</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="exportBtn" class="btn">Export CSV</button>
+        <button id="refreshBtn" class="btn primary">Refresh data</button>
+      </div>
+    </div>
+
+    <div class="status-line" style="margin-bottom:16px">
+      <span id="statusDot" class="dot"></span>
+      <span id="statusText">Memuat data…</span>
+    </div>
+
+    <section class="stats">
+      <div class="card"><div class="stat-label">Total produk</div><div class="stat-value" id="totalProducts">—</div><div class="stat-note">Baris pada tabel products</div></div>
+      <div class="card"><div class="stat-label">Produk aktif</div><div class="stat-value" id="activeProducts">—</div><div class="stat-note" id="activePercent">—</div></div>
+      <div class="card"><div class="stat-label">Total stok</div><div class="stat-value" id="totalStock">—</div><div class="stat-note">Akumulasi unit stok</div></div>
+      <div class="card"><div class="stat-label">Nilai modal stok</div><div class="stat-value" id="inventoryValue">—</div><div class="stat-note">buy_price × stock</div></div>
+      <div class="card"><div class="stat-label">Sinkronisasi terakhir</div><div class="stat-value" id="lastSync" style="font-size:1.05rem">—</div><div class="stat-note" id="lastSyncAgo">—</div></div>
+    </section>
+
+    <div id="errorBox" class="error-box"></div>
+
+    <section class="toolbar">
+      <input id="search" class="control" type="search" placeholder="Cari nama, SKU, ID, kategori, brand…" />
+      <select id="category" class="control"><option value="">Semua kategori</option></select>
+      <select id="brand" class="control"><option value="">Semua brand</option></select>
+      <select id="status" class="control">
+        <option value="">Semua status</option>
+        <option value="active">Aktif</option>
+        <option value="inactive">Nonaktif</option>
+        <option value="low">Stok ≤ 5</option>
+        <option value="out">Stok habis</option>
+      </select>
+      <select id="sort" class="control">
+        <option value="updated_desc">Terbaru diperbarui</option>
+        <option value="name_asc">Nama A–Z</option>
+        <option value="stock_desc">Stok terbesar</option>
+        <option value="stock_asc">Stok terkecil</option>
+        <option value="price_desc">Harga tertinggi</option>
+        <option value="price_asc">Harga terendah</option>
+      </select>
+    </section>
+
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Produk</th>
+              <th>SKU</th>
+              <th>Kategori / Brand</th>
+              <th>Harga jual</th>
+              <th>Harga beli</th>
+              <th>Stok</th>
+              <th>Status</th>
+              <th>Terakhir sync</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div id="empty" class="empty" hidden>Tidak ada produk yang cocok dengan filter.</div>
+      </div>
+      <div class="pager">
+        <div id="pageInfo">—</div>
+        <div class="pager-actions">
+          <button id="prevBtn" class="btn">← Sebelumnya</button>
+          <button id="nextBtn" class="btn">Berikutnya →</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="detailDialog">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modalTitle">Detail produk</div>
+        <div class="small" id="modalSubtitle"></div>
+      </div>
+      <button id="closeDialog" class="close" aria-label="Tutup">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </dialog>
+
+  <script>
+    const API_URL = '/api/products?select=id,olsera_id,name,sku,price,buy_price,stock,weight,description,category,brand,image_url,is_active,source_updated_at,last_seen_at,synced_at,created_at,updated_at,raw_payload&order=updated_at.desc&limit=2000';
+    const PAGE_SIZE = 50;
+    let products = [];
+    let filtered = [];
+    let page = 1;
+
+    const $ = (id) => document.getElementById(id);
+    const rupiah = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+    const number = new Intl.NumberFormat('id-ID');
+    const dateFmt = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]));
+    }
+
+    function asNumber(value) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function asDate(value) {
+      if (!value) return null;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    function formatDate(value) {
+      const d = asDate(value);
+      return d ? dateFmt.format(d) : '—';
+    }
+
+    function relative(value) {
+      const d = asDate(value);
+      if (!d) return 'Belum ada waktu sinkronisasi';
+      const seconds = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+      if (seconds < 60) return `${seconds} detik lalu`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes} menit lalu`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours} jam lalu`;
+      return `${Math.floor(hours / 24)} hari lalu`;
+    }
+
+    function renderStats() {
+      const total = products.length;
+      const active = products.filter(p => p.is_active === true).length;
+      const stock = products.reduce((sum, p) => sum + asNumber(p.stock), 0);
+      const inventory = products.reduce((sum, p) => sum + asNumber(p.stock) * asNumber(p.buy_price), 0);
+      const last = products.map(p => asDate(p.synced_at)).filter(Boolean).sort((a,b) => b-a)[0] || null;
+      $('totalProducts').textContent = number.format(total);
+      $('activeProducts').textContent = number.format(active);
+      $('activePercent').textContent = total ? `${Math.round(active / total * 100)}% dari seluruh produk` : 'Belum ada data';
+      $('totalStock').textContent = number.format(stock);
+      $('inventoryValue').textContent = rupiah.format(inventory);
+      $('lastSync').textContent = last ? dateFmt.format(last) : '—';
+      $('lastSyncAgo').textContent = last ? relative(last) : 'Belum ada data';
+    }
+
+    function populateFilters() {
+      const fill = (el, values, label) => {
+        const current = el.value;
+        el.innerHTML = `<option value="">Semua ${label}</option>` + values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+        el.value = current;
+      };
+      fill($('category'), [...new Set(products.map(p => p.category).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'id')), 'kategori');
+      fill($('brand'), [...new Set(products.map(p => p.brand).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'id')), 'brand');
+    }
+
+    function applyFilters() {
+      const q = $('search').value.trim().toLowerCase();
+      const category = $('category').value;
+      const brand = $('brand').value;
+      const status = $('status').value;
+      const sort = $('sort').value;
+
+      filtered = products.filter(p => {
+        const haystack = [p.name, p.sku, p.olsera_id, p.category, p.brand].map(v => String(v ?? '').toLowerCase()).join(' ');
+        if (q && !haystack.includes(q)) return false;
+        if (category && p.category !== category) return false;
+        if (brand && p.brand !== brand) return false;
+        if (status === 'active' && p.is_active !== true) return false;
+        if (status === 'inactive' && p.is_active !== false) return false;
+        if (status === 'low' && !(asNumber(p.stock) <= 5)) return false;
+        if (status === 'out' && !(asNumber(p.stock) <= 0)) return false;
+        return true;
+      });
+
+      const sorters = {
+        updated_desc: (a,b) => (asDate(b.updated_at)?.getTime() || 0) - (asDate(a.updated_at)?.getTime() || 0),
+        name_asc: (a,b) => String(a.name || '').localeCompare(String(b.name || ''), 'id'),
+        stock_desc: (a,b) => asNumber(b.stock) - asNumber(a.stock),
+        stock_asc: (a,b) => asNumber(a.stock) - asNumber(b.stock),
+        price_desc: (a,b) => asNumber(b.price) - asNumber(a.price),
+        price_asc: (a,b) => asNumber(a.price) - asNumber(b.price),
+      };
+      filtered.sort(sorters[sort] || sorters.updated_desc);
+      page = 1;
+      renderRows();
+    }
+
+    function stockBadge(stock) {
+      const qty = asNumber(stock);
+      if (qty <= 0) return '<span class="badge out">Habis</span>';
+      if (qty <= 5) return `<span class="badge low">${number.format(qty)} unit</span>`;
+      return number.format(qty);
+    }
+
+    function renderRows() {
+      const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+      page = Math.min(page, totalPages);
+      const start = (page - 1) * PAGE_SIZE;
+      const items = filtered.slice(start, start + PAGE_SIZE);
+      $('rows').innerHTML = items.map(p => {
+        const img = p.image_url
+          ? `<img class="thumb" src="${esc(p.image_url)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;thumb placeholder&quot;>IMG</div>'">`
+          : '<div class="thumb placeholder">IMG</div>';
+        return `<tr>
+          <td><div class="product">${img}<div><div class="name">${esc(p.name || 'Tanpa nama')}</div><div class="small">Olsera ID: ${esc(p.olsera_id || '—')}</div></div></div></td>
+          <td>${esc(p.sku || '—')}</td>
+          <td><div>${esc(p.category || '—')}</div><div class="small">${esc(p.brand || '—')}</div></td>
+          <td class="money">${rupiah.format(asNumber(p.price))}</td>
+          <td class="money">${rupiah.format(asNumber(p.buy_price))}</td>
+          <td>${stockBadge(p.stock)}</td>
+          <td>${p.is_active === false ? '<span class="badge inactive">Nonaktif</span>' : '<span class="badge active">Aktif</span>'}</td>
+          <td><div>${formatDate(p.synced_at)}</div><div class="small">${relative(p.synced_at)}</div></td>
+          <td><button class="link-btn" data-id="${esc(p.id)}">Detail</button></td>
+        </tr>`;
+      }).join('');
+      $('empty').hidden = items.length !== 0;
+      $('pageInfo').textContent = filtered.length ? `${number.format(start + 1)}–${number.format(Math.min(start + PAGE_SIZE, filtered.length))} dari ${number.format(filtered.length)} produk` : '0 produk';
+      $('prevBtn').disabled = page <= 1;
+      $('nextBtn').disabled = page >= totalPages;
+      document.querySelectorAll('[data-id]').forEach(btn => btn.addEventListener('click', () => openDetail(btn.dataset.id)));
+    }
+
+    function detailItem(key, value) {
+      return `<div class="detail"><div class="k">${esc(key)}</div><div class="v">${esc(value ?? '—')}</div></div>`;
+    }
+
+    function openDetail(id) {
+      const p = products.find(x => String(x.id) === String(id));
+      if (!p) return;
+      $('modalTitle').textContent = p.name || 'Detail produk';
+      $('modalSubtitle').textContent = `Olsera ID ${p.olsera_id || '—'} • SKU ${p.sku || '—'}`;
+      let raw = p.raw_payload;
+      if (typeof raw === 'string') {
+        try { raw = JSON.parse(raw); } catch (_) {}
+      }
+      const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw ?? {}, null, 2);
+      $('modalBody').innerHTML = `
+        <div class="detail-grid">
+          ${detailItem('Harga jual', rupiah.format(asNumber(p.price)))}
+          ${detailItem('Harga beli', rupiah.format(asNumber(p.buy_price)))}
+          ${detailItem('Stok', `${number.format(asNumber(p.stock))} unit`)}
+          ${detailItem('Berat', `${asNumber(p.weight)} gram`)}
+          ${detailItem('Kategori', p.category)}
+          ${detailItem('Brand', p.brand)}
+          ${detailItem('Status', p.is_active === false ? 'Nonaktif' : 'Aktif')}
+          ${detailItem('Source updated', formatDate(p.source_updated_at))}
+          ${detailItem('Last seen', formatDate(p.last_seen_at))}
+          ${detailItem('Synced at', formatDate(p.synced_at))}
+          ${detailItem('Created at', formatDate(p.created_at))}
+          ${detailItem('Updated at', formatDate(p.updated_at))}
+        </div>
+        <div class="description"><strong>Deskripsi</strong><br>${esc(p.description || 'Tidak ada deskripsi.')}</div>
+        <pre>${esc(rawText)}</pre>`;
+      $('detailDialog').showModal();
+    }
+
+    function exportCsv() {
+      const cols = ['olsera_id','name','sku','category','brand','price','buy_price','stock','weight','is_active','synced_at'];
+      const csv = [cols.join(','), ...filtered.map(row => cols.map(col => {
+        const value = row[col] ?? '';
+        return `"${String(value).replace(/"/g, '""')}"`;
+      }).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `grandivo-products-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function loadProducts() {
+      $('statusDot').className = 'dot';
+      $('statusText').textContent = 'Mengambil data PostgreSQL…';
+      $('errorBox').style.display = 'none';
+      $('refreshBtn').disabled = true;
+      try {
+        const response = await fetch(API_URL, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
+        const data = await response.json();
+        if (!Array.isArray(data)) throw new Error('Respons API bukan array produk.');
+        products = data;
+        filtered = [...products];
+        renderStats();
+        populateFilters();
+        applyFilters();
+        $('statusDot').className = 'dot ok';
+        $('statusText').textContent = `Terhubung • ${number.format(products.length)} produk dimuat • ${new Date().toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })}`;
+      } catch (error) {
+        console.error(error);
+        $('statusDot').className = 'dot error';
+        $('statusText').textContent = 'Gagal mengambil data';
+        $('errorBox').textContent = `Tidak bisa membaca produk dari API.\n${error.message}`;
+        $('errorBox').style.display = 'block';
+      } finally {
+        $('refreshBtn').disabled = false;
+      }
+    }
+
+    ['search','category','brand','status','sort'].forEach(id => $(id).addEventListener(id === 'search' ? 'input' : 'change', applyFilters));
+    $('refreshBtn').addEventListener('click', loadProducts);
+    $('exportBtn').addEventListener('click', exportCsv);
+    $('prevBtn').addEventListener('click', () => { if (page > 1) { page--; renderRows(); } });
+    $('nextBtn').addEventListener('click', () => { if (page * PAGE_SIZE < filtered.length) { page++; renderRows(); } });
+    $('closeDialog').addEventListener('click', () => $('detailDialog').close());
+    $('detailDialog').addEventListener('click', (event) => { if (event.target === $('detailDialog')) $('detailDialog').close(); });
+
+    loadProducts();
+  </script>
+</body>
+</html>
