@@ -1,12 +1,14 @@
 {
-  "name": "Olsera to PostgreSQL Sync Workflow - Grandivo",
   "nodes": [
     {
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [80, 80],
-      "id": "06b0e920-0751-4af0-b26e-5abf1fc8aa1b",
+      "position": [
+        432,
+        256
+      ],
+      "id": "149223d0-4d1b-4c5f-85fe-3205e5cbaf8f",
       "name": "Jalankan Manual untuk Pengujian"
     },
     {
@@ -22,8 +24,11 @@
       },
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [80, 280],
-      "id": "394cdf9e-7168-468d-982d-1b2be2beaac2",
+      "position": [
+        432,
+        464
+      ],
+      "id": "0caef792-7936-4d90-9a29-89146be8a874",
       "name": "Jadwal Jam 12 Malam WIB"
     },
     {
@@ -65,8 +70,11 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [336, 180],
-      "id": "5ac82d02-0b56-48dd-aa8d-9ce66d52a42f",
+      "position": [
+        672,
+        368
+      ],
+      "id": "00743ad3-0a7e-4e77-aa57-04377ce5806d",
       "name": "Ambil Access Token Olsera",
       "retryOnFail": true,
       "maxTries": 3,
@@ -79,8 +87,11 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [576, 180],
-      "id": "d1224791-9ed9-49ce-958d-690ccba85e02",
+      "position": [
+        928,
+        368
+      ],
+      "id": "a03792c5-27c7-41f4-b0b8-bea660390312",
       "name": "Validasi Access Token Olsera",
       "notes": "Mendukung respons token di top-level maupun di dalam data/result."
     },
@@ -109,7 +120,7 @@
             },
             {
               "name": "Authorization",
-              "value": "={{ $('Validasi Access Token Olsera').first().json.access_token }}"
+              "value": "={{ 'Bearer ' + String($('Validasi Access Token Olsera').first().json.access_token).trim() }}"
             }
           ]
         },
@@ -121,8 +132,11 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [816, 180],
-      "id": "e7b6a065-c389-43e4-be97-dc67e24569f7",
+      "position": [
+        1168,
+        368
+      ],
+      "id": "d7df5c76-2e15-424e-9395-11ad8aba3dda",
       "name": "Ambil Data Produk Olsera",
       "retryOnFail": true,
       "maxTries": 3,
@@ -135,8 +149,11 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1056, 180],
-      "id": "c109fac1-e5d1-4d07-a170-b9c0db096714",
+      "position": [
+        1408,
+        368
+      ],
+      "id": "c191b6c5-1cc9-4a04-aec0-76b655f381c8",
       "name": "Validasi & Map Produk",
       "notes": "Node ini sengaja gagal jika format respons tidak dikenali, daftar produk kosong, atau id/nama produk tidak tersedia."
     },
@@ -150,12 +167,21 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1296, 180],
-      "id": "dc587892-0f3c-4beb-9b0e-320f326b1778",
+      "position": [
+        1648,
+        368
+      ],
+      "id": "2fd558c9-d0f1-43c7-ae11-5df4b3302960",
       "name": "Upsert Produk ke PostgreSQL",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000,
+      "credentials": {
+        "postgres": {
+          "id": "JbTcnqTJx6eqQEEu",
+          "name": "Postgres account"
+        }
+      },
       "notes": "Setelah import, pilih credential PostgreSQL Grandivo. Query menggunakan parameter $1-$14."
     },
     {
@@ -164,42 +190,96 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1536, 180],
-      "id": "06880be0-cefe-419b-8b64-2d578beec7a9",
+      "position": [
+        1904,
+        464
+      ],
+      "id": "b5f7cca5-8150-425a-9deb-5d63d07c4f94",
       "name": "Ringkasan Hasil Sync"
     }
   ],
   "connections": {
     "Jalankan Manual untuk Pengujian": {
-      "main": [[{"node": "Ambil Access Token Olsera", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Ambil Access Token Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Jadwal Jam 12 Malam WIB": {
-      "main": [[{"node": "Ambil Access Token Olsera", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Ambil Access Token Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Ambil Access Token Olsera": {
-      "main": [[{"node": "Validasi Access Token Olsera", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Validasi Access Token Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validasi Access Token Olsera": {
-      "main": [[{"node": "Ambil Data Produk Olsera", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Ambil Data Produk Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Ambil Data Produk Olsera": {
-      "main": [[{"node": "Validasi & Map Produk", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Validasi & Map Produk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validasi & Map Produk": {
-      "main": [[{"node": "Upsert Produk ke PostgreSQL", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Upsert Produk ke PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Upsert Produk ke PostgreSQL": {
-      "main": [[{"node": "Ringkasan Hasil Sync", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Ringkasan Hasil Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
-  },
-  "settings": {
-    "executionOrder": "v1",
-    "timezone": "Asia/Jakarta"
   },
   "pinData": {},
   "meta": {
-    "templateCredsSetupCompleted": false
-  },
-  "active": false,
-  "tags": []
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d3075d274d5ee04c5fbc805b736e2ca8882cbcc910eba56c5ce6f07eb3d47c30"
+  }
 }
