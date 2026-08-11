@@ -114,8 +114,7 @@
       "parameters": {
         "url": "={{ $json.source_endpoint }}",
         "sendQuery": true,
-        "specifyQuery": "json",
-        "jsonQuery": "={{ JSON.stringify({\n  from: $json.business_date,\n  to: $json.business_date,\n  per_page: $json.per_page,\n  page: 1,\n  ...(['0', '1'].includes(String($json.wunpaid))\n    ? { wunpaid: String($json.wunpaid) }\n    : {}),\n}) }}",
+        "specifyQuery": "keypair",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -149,7 +148,7 @@
                 ]
               },
               "paginationCompleteWhen": "other",
-              "completeExpression": "={{ (() => {\n  const body = $response.body;\n  const candidates = [\n    body?.data?.data,\n    body?.data?.items,\n    body?.data?.rows,\n    body?.result?.data,\n    body?.result?.items,\n    body?.result?.rows,\n    body?.data,\n    body?.items,\n    body?.rows,\n    body?.result,\n    body,\n  ];\n  const rows = candidates.find((candidate) => Array.isArray(candidate));\n  if (!rows) return true;\n\n  const meta = body?.meta ?? body?.data?.meta ?? body?.result?.meta ?? {};\n  const current = Number(\n    meta?.current_page ??\n    body?.current_page ??\n    body?.data?.current_page ??\n    body?.result?.current_page ??\n    0\n  );\n  const last = Number(\n    meta?.last_page ??\n    body?.last_page ??\n    body?.data?.last_page ??\n    body?.result?.last_page ??\n    0\n  );\n  const links = body?.links ?? body?.data?.links ?? body?.result?.links;\n  if (Number.isInteger(current) && current > 0 &&\n      Number.isInteger(last) && last > 0) {\n    return current >= last;\n  }\n  if (links && Object.hasOwn(links, 'next')) {\n    return links.next == null;\n  }\n\n  const nextOwners = [body, body?.data, body?.result];\n  for (const owner of nextOwners) {\n    if (owner && Object.hasOwn(owner, 'next_page_url')) {\n      return owner.next_page_url == null;\n    }\n  }\n\n  return rows.length < 15;\n})() }}",
+              "completeExpression": "={{ (() => {\n  const statusCode = Number($response.statusCode ?? $response.status ?? 0);\n  if (Number.isInteger(statusCode) && statusCode > 0 && (statusCode < 200 || statusCode >= 300)) {\n    return true;\n  }\n\n  const body = $response.body;\n  const candidates = [\n    body?.data?.data,\n    body?.data?.items,\n    body?.data?.rows,\n    body?.result?.data,\n    body?.result?.items,\n    body?.result?.rows,\n    body?.data,\n    body?.items,\n    body?.rows,\n    body?.result,\n    body,\n  ];\n  const rows = candidates.find((candidate) => Array.isArray(candidate));\n  if (!rows) return true;\n\n  const meta = body?.meta ?? body?.data?.meta ?? body?.result?.meta ?? {};\n  const current = Number(\n    meta?.current_page ??\n    body?.current_page ??\n    body?.data?.current_page ??\n    body?.result?.current_page ??\n    0\n  );\n  const last = Number(\n    meta?.last_page ??\n    body?.last_page ??\n    body?.data?.last_page ??\n    body?.result?.last_page ??\n    0\n  );\n  const perPage = Number(\n    meta?.per_page ??\n    body?.per_page ??\n    body?.data?.per_page ??\n    body?.result?.per_page ??\n    15\n  );\n\n  if (Number.isInteger(current) && current > 0 &&\n      Number.isInteger(last) && last > 0) {\n    return current >= last;\n  }\n\n  const links = body?.links ?? body?.data?.links ?? body?.result?.links;\n  if (links && Object.hasOwn(links, 'next')) {\n    return links.next == null || links.next === '';\n  }\n\n  const nextOwners = [body, body?.data, body?.result];\n  for (const owner of nextOwners) {\n    if (owner && Object.hasOwn(owner, 'next_page_url')) {\n      return owner.next_page_url == null || owner.next_page_url === '';\n    }\n  }\n\n  // Fallback: short/final page. Use configured per_page when meta absent.\n  const limit = Number.isInteger(perPage) && perPage > 0 ? perPage : 15;\n  return rows.length < limit;\n})() }}",
               "limitPagesFetched": true,
               "maxRequests": 500,
               "requestInterval": 2000
@@ -161,6 +160,30 @@
               "batchInterval": 3000
             }
           }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "from",
+              "value": "={{ $json.business_date }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $json.business_date }}"
+            },
+            {
+              "name": "per_page",
+              "value": "={{ String($json.per_page) }}"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "wunpaid",
+              "value": "={{ ['0', '1'].includes(String($json.wunpaid)) ? String($json.wunpaid) : '' }}"
+            }
+          ]
         }
       },
       "id": "86c9d348-c6c0-4b03-ac2c-b43da008b7d0",
