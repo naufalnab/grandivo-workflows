@@ -7,6 +7,8 @@ Repositori ini berisi workflow n8n dan konfigurasi Docker Swarm untuk otomasi op
 - `stack-postgres.yml`: stack PostgreSQL untuk Portainer/Docker Swarm.
 - `products.sql`: skema database katalog produk Grandivo.
 - `olsera_to_postgres.json`: workflow sinkronisasi produk Olsera ke PostgreSQL.
+- `olsera_daily_revenue.sql`: tabel, view, dan fungsi snapshot Sales details/omzet harian.
+- `olsera_daily_revenue_to_postgres.json`: workflow Sales details dan omzet harian Olsera.
 - `n8n-olsera-env-snippet.yml`: potongan environment untuk autentikasi Olsera pada stack n8n.
 - `instagram.json`: workflow validasi consent pelanggan dan publikasi Instagram.
 - `.env.example`: contoh variabel non-rahasia untuk stack PostgreSQL.
@@ -101,7 +103,7 @@ Workflow tidak lagi memakai access token statis. Setiap eksekusi akan:
 
 1. menukar `app_id` dan `secret_key` menjadi access token;
 2. memvalidasi access token;
-3. memakai token tersebut pada request Product List tanpa awalan `Bearer`.
+3. memakai token tersebut sebagai `Authorization: Bearer <access_token>`.
 
 Tambahkan environment berikut pada service n8n. Potongan yang sama tersedia di
 `n8n-olsera-env-snippet.yml`.
@@ -166,7 +168,7 @@ grant_type=secret_key
 Product List memakai:
 
 ```text
-Authorization: <access_token>
+Authorization: Bearer <access_token>
 per_page=100
 page=1
 ```
@@ -206,7 +208,115 @@ Workflow sengaja gagal bila:
 
 Query PostgreSQL menggunakan parameter `$1` sampai `$14`.
 
-## 4. Workflow Instagram
+## 4. Sales details dan omzet harian Olsera
+
+Workflow baru memakai endpoint laporan penjualan resmi:
+
+```text
+GET https://api-open.olsera.co.id/api/open-api/v1/en/report/salesdetails
+```
+
+Alurnya:
+
+```text
+Manual/Schedule 00:15 WIB
+→ ambil token
+→ buat tiga tanggal bisnis terakhir
+→ tarik setiap halaman Sales details per tanggal
+→ validasi respons, pagination, field nominal, dan kunci baris
+→ ganti snapshot tanggal secara atomik di PostgreSQL
+→ hitung omzet exact-decimal di PostgreSQL
+```
+
+Tiga hari terakhir ditarik ulang agar perubahan terlambat dapat dikoreksi. Satu
+tanggal hanya diganti jika respons sukses dan halaman terakhir dapat dibuktikan dari
+`meta.current_page/last_page`, `links.next`, atau `next_page_url`. Setelah konfigurasi
+produksi lengkap, respons kosong yang tervalidasi menjadi omzet `0`; respons error,
+wrapper tidak dikenal, atau pagination meragukan tidak menulis DB.
+
+### Siapkan database
+
+Pada volume PostgreSQL baru, `stack-postgres.yml` memasang schema otomatis. Pada volume
+lama yang belum memiliki tabel Olsera ini, jalankan:
+
+```bash
+psql -U grandivo_sync -d grandivo -f olsera_daily_revenue.sql
+```
+
+`CREATE TABLE IF NOT EXISTS` bukan alat migrasi schema yang sudah berbeda. Jika nama
+tabel/fungsi tersebut sudah pernah dibuat dari versi eksperimen, backup lalu buat
+migration `ALTER` yang ditinjau; jangan menganggap menjalankan ulang file akan mengubah
+constraint atau primary key lama.
+
+### Uji manual dan kunci definisi omzet
+
+1. Import `olsera_daily_revenue_to_postgres.json` ke n8n.
+2. Pilih ulang credential pada **Simpan Snapshot Harian ke PostgreSQL**.
+3. Jangan aktifkan jadwal.
+4. Biarkan konfigurasi definisi omzet kosong dan jalankan manual sekali. Node
+   **Validasi & Normalisasi Sales Details** sengaja berhenti sebelum DB; inspeksi INPUT
+   node itu untuk melihat schema respons nyata.
+5. Pada **Tanggal Bisnis WIB & Konfigurasi**, isi semua nilai berikut berdasarkan
+   respons nyata dan rekonsiliasi laporan Olsera:
+
+```text
+REVENUE_FIELD       path nominal yang dijumlahkan per report row
+RECORD_KEY_FIELDS   satu/lebih path yang unik dan stabil per report row
+ROW_GRAIN           arti satu row, mis. order atau order-line
+WUNPAID             "0" atau "1" setelah uji A/B
+AMOUNT_BASIS        definisi gross/net, diskon, pajak, retur
+SOURCE_SCOPE        label tetap untuk akun/outlet/token ini
+CALCULATION_VERSION versi definisi omzet, mis. v1
+```
+
+Dokumentasi Olsera belum menerbitkan schema respons, grain baris, timezone sumber,
+field nominal, nilai default/makna pasti `wunpaid`, maupun apakah retur sudah
+dikurangkan. Kandidat field dalam pesan error hanya bantuan diagnostik dan tidak pernah
+dipakai otomatis. Uji `WUNPAID="0"` dan `"1"` pada tanggal yang sama, lalu cocokkan
+pesanan belum dibayar, pembatalan, diskon, pajak, dan retur dengan laporan Olsera.
+
+Setelah konfigurasi lengkap, jalankan ulang dua kali. Hasil tidak boleh berlipat dan
+harus cocok dengan laporan Olsera sebelum workflow diaktifkan. Untuk backfill, isi
+`MANUAL_BUSINESS_DATE` dengan tanggal kalender `YYYY-MM-DD`, lalu kosongkan kembali.
+
+### Verifikasi hasil
+
+```sql
+SELECT *
+FROM public.v_olsera_daily_revenue
+ORDER BY source_scope, business_date DESC
+LIMIT 30;
+
+SELECT
+    source_scope,
+    business_date,
+    record_key,
+    order_no,
+    revenue_amount,
+    revenue_field,
+    status,
+    payment_status
+FROM public.olsera_sales_detail_rows
+ORDER BY source_scope, business_date DESC, record_key
+LIMIT 100;
+
+SELECT
+    source_scope,
+    business_date,
+    SUM(revenue_amount) AS detail_sum
+FROM public.olsera_sales_detail_rows
+GROUP BY source_scope, business_date
+ORDER BY source_scope, business_date DESC;
+```
+
+Workflow tidak menyimpan data eksekusi sukses/error di n8n untuk mengurangi retensi
+token dan payload pelanggan. Raw report row tetap disimpan di PostgreSQL untuk audit;
+gunakan user DB non-superuser dengan hak minimum dan tetapkan kebijakan retensi/akses.
+
+Dokumentasi resmi: [Sales details](https://docs-api-open.olsera.co.id/documentation/sales-details)
+dan [Token](https://docs-api-open.olsera.co.id/documentation/token).
+
+## 5. Workflow Instagram
 
 Sebelum mengaktifkan `instagram.json`:
 
