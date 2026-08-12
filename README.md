@@ -230,7 +230,9 @@ Manual/Schedule 00:15 WIB
 
 Tiga hari terakhir ditarik ulang agar perubahan terlambat dapat dikoreksi. Satu
 tanggal hanya diganti jika respons sukses dan halaman terakhir dapat dibuktikan dari
-`meta.current_page/last_page`, `links.next`, atau `next_page_url`. Setelah konfigurasi
+`meta.current_page/last_page`, `links.next`/`next_page_url`, `meta.total` yang cocok,
+atau halaman akhir yang lebih pendek dari `per_page`. Pagination HTTP berhenti kecuali
+ada sinyal eksplisit halaman berikutnya (mencegah loop respons identik). Setelah konfigurasi
 produksi lengkap, respons kosong yang tervalidasi menjadi omzet `0`; respons error,
 wrapper tidak dikenal, atau pagination meragukan tidak menulis DB.
 
