@@ -51,6 +51,34 @@ services:
         limits:
           memory: 1G
 
+  adminer:
+    image: ${ADMINER_IMAGE:-adminer:5.5.0-standalone}
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - grandivo_backend
+    ports:
+      - target: 8080
+        published: ${ADMINER_PORT:-8080}
+        protocol: tcp
+        mode: ingress
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      resources:
+        reservations:
+          memory: 32M
+        limits:
+          memory: 256M
+
 networks:
   grandivo_backend:
     external: true

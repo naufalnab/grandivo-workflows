@@ -61,6 +61,8 @@ Nilai default:
 POSTGRES_DB=grandivo
 POSTGRES_USER=grandivo_sync
 POSTGRES_IMAGE=postgres:16-alpine
+ADMINER_IMAGE=adminer:5.5.0-standalone
+ADMINER_PORT=8080
 ```
 
 `products.sql` hanya otomatis dijalankan ketika volume PostgreSQL masih kosong.
@@ -96,6 +98,34 @@ SSL: disable
 ```
 
 Gunakan nama service yang tampil di menu **Services** Portainer bila berbeda.
+
+### Membuka PostgreSQL melalui Adminer
+
+Stack juga menjalankan Adminer pada port `8080`. Setelah stack selesai di-update atau
+di-redeploy, buka:
+
+```text
+http://IP_SERVER:8080
+```
+
+Login dengan:
+
+```text
+System   : PostgreSQL
+Server   : postgres
+Username : grandivo_sync
+Password : nilai secret grandivo_postgres_password
+Database : grandivo
+```
+
+Jika `postgres` tidak terdeteksi, gunakan nama lengkap service PostgreSQL yang terlihat
+di **Services** Portainer, misalnya `grandivo-db_postgres`.
+
+Port yang dipublikasikan oleh Docker Swarm dapat diterima oleh setiap node melalui
+routing mesh. Batasi TCP `8080` pada firewall/provider firewall hanya ke IP publik Anda,
+atau letakkan Adminer di belakang reverse proxy HTTPS dengan autentikasi tambahan.
+Jangan membuka port PostgreSQL `5432` ke internet. Nilai port Adminer dapat diganti
+melalui environment `ADMINER_PORT`.
 
 ## 2. Menyiapkan autentikasi Olsera
 
