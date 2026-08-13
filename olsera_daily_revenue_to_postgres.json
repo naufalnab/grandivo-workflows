@@ -128,7 +128,7 @@
             },
             {
               "name": "page",
-              "value": "1"
+              "value": "={{ Math.max(1, ($pageCount ?? 0) + 1) }}"
             },
             {
               "name": "wunpaid",
