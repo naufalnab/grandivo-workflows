@@ -100,13 +100,27 @@
         "jsCode": "/*\n * MODE DIAGNOSTIK PERTAMA:\n * Biarkan field definisi omzet kosong, jalankan manual, lalu inspeksi INPUT\n * node berikutnya. Workflow sengaja berhenti sebelum PostgreSQL.\n *\n * MODE PRODUKSI:\n * Isi seluruh field bertanda WAJIB berdasarkan satu respons nyata yang sudah\n * direkonsiliasi dengan laporan Olsera. Jangan menebak nama field.\n */\nconst CONFIG = {\n  LOOKBACK_DAYS: 3,\n  MANUAL_BUSINESS_DATE: '',\n\n  REVENUE_FIELD: '',          // WAJIB, path nominal per report row\n  RECORD_KEY_FIELDS: [],      // WAJIB, contoh setelah verifikasi: ['order_id', 'item_id']\n  ROW_GRAIN: '',              // WAJIB, contoh: 'order-line'\n  WUNPAID: '',                // WAJIB: '0' atau '1' setelah uji A/B\n  AMOUNT_BASIS: '',           // WAJIB, contoh: 'net-after-discount-before-return'\n  SOURCE_SCOPE: 'grandivo-main',\n  CALCULATION_VERSION: 'v1',\n\n  PER_PAGE: 15,\n  MAX_REQUESTS: 500,\n  // Jeda antar halaman pagination (ms). Olsera mudah 429 jika terlalu rapat.\n  REQUEST_INTERVAL_MS: 2000,\n  // Jeda antar tanggal bisnis / item input HTTP (ms).\n  ITEM_GAP_MS: 3000,\n  TIMEZONE: 'Asia/Jakarta',\n  SOURCE_ENDPOINT: 'https://api-open.olsera.co.id/api/open-api/v1/en/report/salesdetails',\n};\n\nconst token = String($input.first().json.access_token ?? '').trim();\nif (!token) {\n  throw new Error('Access token Olsera kosong sebelum membuat rentang tanggal.');\n}\n\nconst ymdInTimezone = (date) => {\n  const parts = new Intl.DateTimeFormat('en-CA', {\n    timeZone: CONFIG.TIMEZONE,\n    year: 'numeric',\n    month: '2-digit',\n    day: '2-digit',\n  }).formatToParts(date);\n\n  const values = Object.fromEntries(\n    parts\n      .filter((part) => part.type !== 'literal')\n      .map((part) => [part.type, part.value])\n  );\n\n  return values.year + '-' + values.month + '-' + values.day;\n};\n\nconst isStrictYmd = (value) => {\n  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);\n  if (!match) return false;\n\n  const year = Number(match[1]);\n  const month = Number(match[2]);\n  const day = Number(match[3]);\n  const parsed = new Date(Date.UTC(year, month - 1, day));\n\n  return (\n    parsed.getUTCFullYear() === year &&\n    parsed.getUTCMonth() === month - 1 &&\n    parsed.getUTCDate() === day\n  );\n};\n\nconst manualDate = String(CONFIG.MANUAL_BUSINESS_DATE || '').trim();\nif (manualDate && !isStrictYmd(manualDate)) {\n  throw new Error('MANUAL_BUSINESS_DATE bukan tanggal kalender YYYY-MM-DD yang valid.');\n}\n\nconst lookbackDays = Number(CONFIG.LOOKBACK_DAYS);\nif (!Number.isInteger(lookbackDays) || lookbackDays < 1 || lookbackDays > 31) {\n  throw new Error('LOOKBACK_DAYS harus bilangan bulat antara 1 dan 31.');\n}\n\nconst perPage = Number(CONFIG.PER_PAGE);\nif (!Number.isInteger(perPage) || perPage !== 15) {\n  throw new Error('PER_PAGE harus 15 sampai batas resmi Olsera diverifikasi.');\n}\n\nconst maxRequests = Number(CONFIG.MAX_REQUESTS);\nif (!Number.isInteger(maxRequests) || maxRequests !== 500) {\n  throw new Error('MAX_REQUESTS harus 500 agar sama dengan batas node HTTP.');\n}\n\nconst requestIntervalMs = Number(CONFIG.REQUEST_INTERVAL_MS);\nif (!Number.isInteger(requestIntervalMs) || requestIntervalMs < 1000 || requestIntervalMs > 60000) {\n  throw new Error('REQUEST_INTERVAL_MS harus bilangan bulat 1000-60000.');\n}\n\nconst itemGapMs = Number(CONFIG.ITEM_GAP_MS);\nif (!Number.isInteger(itemGapMs) || itemGapMs < 1000 || itemGapMs > 120000) {\n  throw new Error('ITEM_GAP_MS harus bilangan bulat 1000-120000.');\n}\n\nif (!Array.isArray(CONFIG.RECORD_KEY_FIELDS)) {\n  throw new Error('RECORD_KEY_FIELDS harus berupa array.');\n}\n\nconst todayWib = ymdInTimezone(new Date());\nconst todayAnchor = new Date(todayWib + 'T12:00:00+07:00');\nconst dates = manualDate\n  ? [manualDate]\n  : Array.from({ length: lookbackDays }, (_, index) =>\n      ymdInTimezone(new Date(todayAnchor.getTime() - (index + 1) * 86400000))\n    );\n\nconst sourceFetchedAt = new Date().toISOString();\n\nreturn dates.map((businessDate) => ({\n  json: {\n    access_token: token,\n    business_date: businessDate,\n    revenue_field: String(CONFIG.REVENUE_FIELD || '').trim(),\n    record_key_fields: CONFIG.RECORD_KEY_FIELDS.map((field) => String(field).trim()),\n    row_grain: String(CONFIG.ROW_GRAIN || '').trim(),\n    wunpaid: String(CONFIG.WUNPAID || '').trim(),\n    amount_basis: String(CONFIG.AMOUNT_BASIS || '').trim(),\n    source_scope: String(CONFIG.SOURCE_SCOPE || '').trim(),\n    calculation_version: String(CONFIG.CALCULATION_VERSION || '').trim(),\n    per_page: perPage,\n    max_requests: maxRequests,\n    request_interval_ms: requestIntervalMs,\n    item_gap_ms: itemGapMs,\n    timezone: CONFIG.TIMEZONE,\n    source_endpoint: CONFIG.SOURCE_ENDPOINT,\n    source_fetched_at: sourceFetchedAt,\n  },\n}));"
       },
       "id": "4ec05f5a-3327-48f9-86e0-b2c91318bb8b",
-      "name": "Tanggal Bisnis WIB & Konfigurasi",
+      "name": "Legacy Tanggal Bisnis WIB & Konfigurasi",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         5424,
         -224
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const token = String($input.first().json.access_token ?? '').trim();\nif (!token) throw new Error('Access token Olsera kosong.');\n\nreturn [{ json: {\n  access_token: token, business_date: '2026-08-12', revenue_field: 'net_amount',\n  record_key_fields: ['id'], row_grain: 'order', wunpaid: '0',\n  amount_basis: 'net_amount-per-order', source_scope: 'grandivo-main',\n  calculation_version: 'v1', per_page: 15,\n  source_endpoint: 'https://api-open.olsera.co.id/api/open-api/v1/en/report/salesdetails',\n  source_fetched_at: new Date().toISOString(), page: 1,\n} }];"
+      },
+      "id": "e55a3c06-1f2f-4e5a-bbca-d58e0123a249",
+      "name": "Tanggal Bisnis WIB & Konfigurasi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5424,
+        -80
+      ],
+      "notes": "Konfigurasi uji penyimpanan PostgreSQL berdasarkan respons Olsera yang sudah diverifikasi."
     },
     {
       "parameters": {
@@ -128,11 +142,11 @@
             },
             {
               "name": "page",
-              "value": "={{ Math.max(1, ($pageCount ?? 0) + 1) }}"
+              "value": "1"
             },
             {
               "name": "wunpaid",
-              "value": "={{ ['0', '1'].includes(String($json.wunpaid)) ? String($json.wunpaid) : '' }}"
+              "value": "={{ $json.wunpaid }}"
             }
           ]
         },
@@ -150,34 +164,10 @@
           ]
         },
         "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 3000
-            }
-          },
           "response": {
             "response": {
               "fullResponse": true,
               "responseFormat": "json"
-            }
-          },
-          "pagination": {
-            "pagination": {
-              "parameters": {
-                "parameters": [
-                  {
-                    "type": "qs",
-                    "name": "page",
-                    "value": "={{ $pageCount + 1 }}"
-                  }
-                ]
-              },
-              "paginationCompleteWhen": "other",
-              "completeExpression": "={{ (() => {\n  const statusCode = Number($response.statusCode ?? $response.status ?? 0);\n  if (Number.isInteger(statusCode) && statusCode > 0 && (statusCode < 200 || statusCode >= 300)) {\n    return true;\n  }\n\n  const body = $response.body;\n  const candidates = [\n    body?.data?.data,\n    body?.data?.items,\n    body?.data?.rows,\n    body?.result?.data,\n    body?.result?.items,\n    body?.result?.rows,\n    body?.data,\n    body?.items,\n    body?.rows,\n    body?.result,\n    body,\n  ];\n  const rows = candidates.find((candidate) => Array.isArray(candidate));\n  if (!rows || rows.length === 0) return true;\n\n  const meta = body?.meta ?? body?.data?.meta ?? body?.result?.meta ?? {};\n  const current = Number(\n    meta?.current_page ??\n    body?.current_page ??\n    body?.data?.current_page ??\n    body?.result?.current_page ??\n    0\n  );\n  const last = Number(\n    meta?.last_page ??\n    body?.last_page ??\n    body?.data?.last_page ??\n    body?.result?.last_page ??\n    0\n  );\n  const perPage = Number(\n    meta?.per_page ??\n    body?.per_page ??\n    body?.data?.per_page ??\n    body?.result?.per_page ??\n    $json.per_page ??\n    15\n  );\n  const total = Number(\n    meta?.total ??\n    body?.total ??\n    body?.data?.total ??\n    body?.result?.total\n  );\n\n  if (Number.isInteger(current) && current > 0 &&\n      Number.isInteger(last) && last > 0) {\n    return current >= last;\n  }\n\n  const links = body?.links ?? body?.data?.links ?? body?.result?.links;\n  if (links && Object.hasOwn(links, 'next')) {\n    return links.next == null || links.next === '';\n  }\n\n  const nextOwners = [body, body?.data, body?.result];\n  for (const owner of nextOwners) {\n    if (owner && Object.hasOwn(owner, 'next_page_url')) {\n      return owner.next_page_url == null || owner.next_page_url === '';\n    }\n  }\n\n  const limit = Number.isInteger(perPage) && perPage > 0 ? perPage : 15;\n  if (Number.isInteger(total) && total >= 0) {\n    return Number($pageCount) * limit >= total || rows.length < limit;\n  }\n\n  // Fail-closed: a full page without next-page metadata is not proof another page exists.\n  return true;\n})() }}",
-              "limitPagesFetched": true,
-              "maxRequests": 500,
-              "requestInterval": 2000
             }
           }
         }
@@ -192,7 +182,8 @@
       ],
       "retryOnFail": true,
       "maxTries": 5,
-      "waitBetweenTries": 5000
+      "waitBetweenTries": 5000,
+      "notes": "Mengambil halaman eksplisit dari input. Tidak memakai pagination otomatis n8n."
     },
     {
       "parameters": {
@@ -245,6 +236,71 @@
       "position": [
         6464,
         -224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Tanggal Bisnis WIB & Konfigurasi').first().json;\nconst pages = new Map();\nfor (const item of $input.all()) {\n  const status = Number(item.json?.statusCode);\n  const body = item.json?.body;\n  if (status < 200 || status >= 300 || !body || body.status !== 200 || body.error) throw new Error('Respons Olsera gagal.');\n  const page = Number(body.meta?.current_page);\n  const last = Number(body.meta?.last_page);\n  if (!Number.isInteger(page) || !Number.isInteger(last) || page < 1 || last < page || pages.has(page)) throw new Error('Metadata/halaman Olsera tidak valid.');\n  pages.set(page, body);\n}\nconst lastPage = Math.max(...[...pages.values()].map((body) => Number(body.meta.last_page)));\nfor (let page = 1; page <= lastPage; page++) if (!pages.has(page)) throw new Error('Halaman Olsera belum diambil: ' + page);\nconst rows = [];\nfor (let page = 1; page <= lastPage; page++) {\n  const data = pages.get(page).data;\n  if (!Array.isArray(data)) throw new Error('Field data bukan array pada halaman ' + page);\n  rows.push(...data);\n}\nconst total = Number(pages.get(1).meta.total);\nif (!Number.isInteger(total) || rows.length !== total) throw new Error('Jumlah order tidak cocok: ' + rows.length + '/' + total);\nconst keys = new Set();\nconst normalized = rows.map((row) => {\n  const id = String(row?.id ?? '').trim();\n  const amount = String(row?.net_amount ?? '').trim();\n  if (!id || !/^-?\\d+(?:\\.\\d+)?$/.test(amount)) throw new Error('Order tanpa id/net_amount valid.');\n  const key = 'id=' + encodeURIComponent(id);\n  if (keys.has(key)) throw new Error('ID order duplikat: ' + id);\n  keys.add(key);\n  return { record_key: key, order_id: id, order_no: String(row.order_no ?? ''), source_timestamp_raw: String(row.order_time ?? row.order_date ?? ''), status: String(row.status ?? ''), payment_status: String(row.is_paid ?? ''), customer_id: String(row.customer_id ?? ''), store_id: String(row.store_id ?? ''), revenue_amount: amount, raw_payload: row };\n});\nconst metadata = [...pages.entries()].sort(([a], [b]) => a - b).map(([page, body]) => ({ page_index: page, http_status_code: 200, current_page: body.meta.current_page, last_page: body.meta.last_page, per_page: body.meta.per_page, total: body.meta.total }));\nreturn [{ json: { source_scope: config.source_scope, business_date: config.business_date, report_row_count: normalized.length, page_count: lastPage, revenue_field: config.revenue_field, record_key_fields_json: JSON.stringify(config.record_key_fields), row_grain: config.row_grain, wunpaid: config.wunpaid, amount_basis: config.amount_basis, calculation_version: config.calculation_version, source_endpoint: config.source_endpoint, source_fetched_at: config.source_fetched_at, rows_json: JSON.stringify(normalized), source_metadata_json: JSON.stringify(metadata) } }];"
+      },
+      "id": "f0e95d7f-59ac-41a7-b111-7355df08d9f2",
+      "name": "Normalisasi Snapshot Sales untuk PostgreSQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5952,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Tanggal Bisnis WIB & Konfigurasi').first().json.source_endpoint + '?from=' + $('Tanggal Bisnis WIB & Konfigurasi').first().json.business_date + '&to=' + $('Tanggal Bisnis WIB & Konfigurasi').first().json.business_date + '&per_page=15&page=2&wunpaid=0' }}",
+        "sendQuery": false,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('Tanggal Bisnis WIB & Konfigurasi').first().json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "b1c06c15-4df3-4ca4-908e-a2f99be2c42b",
+      "name": "Ambil Sales Details Olsera - Halaman 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        5696,
+        -80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "Halaman 2 melalui URL query eksplisit; tidak menggunakan Query Parameters atau pagination otomatis n8n."
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Tanggal Bisnis WIB & Konfigurasi').first().json;\nconst pages = new Map();\nfor (const item of [...$('Ambil Sales Details Olsera').all(), ...$input.all()]) {\n  const body = item.json?.body;\n  if (Number(item.json?.statusCode) !== 200 || body?.status !== 200 || body?.error || !body?.meta) throw new Error('Respons Olsera gagal/tidak lengkap.');\n  const page = Number(body.meta.current_page);\n  const last = Number(body.meta.last_page);\n  if (!Number.isInteger(page) || !Number.isInteger(last) || page < 1 || last < page || pages.has(page)) throw new Error('Halaman Olsera tidak valid atau duplikat: ' + page);\n  pages.set(page, body);\n}\nconst lastPage = Math.max(...[...pages.values()].map((body) => Number(body.meta.last_page)));\nfor (let page = 1; page <= lastPage; page++) if (!pages.has(page)) throw new Error('Halaman Olsera belum diterima: ' + page);\nconst rows = [...pages.entries()].sort(([a], [b]) => a - b).flatMap(([, body]) => { if (!Array.isArray(body.data)) throw new Error('data bukan array.'); return body.data; });\nconst total = Number(pages.get(1).meta.total);\nif (!Number.isInteger(total) || rows.length !== total) throw new Error('Jumlah order tidak cocok: ' + rows.length + '/' + total);\nconst keys = new Set();\nconst normalized = rows.map((row) => {\n  const id = String(row?.id ?? '').trim(), amount = String(row?.net_amount ?? '').trim();\n  if (!id || !/^-?\\d+(?:\\.\\d+)?$/.test(amount)) throw new Error('Order tanpa id/net_amount valid.');\n  const key = 'id=' + encodeURIComponent(id); if (keys.has(key)) throw new Error('ID order duplikat: ' + id); keys.add(key);\n  return { record_key: key, order_id: id, order_no: String(row.order_no ?? ''), source_timestamp_raw: String(row.order_time ?? row.order_date ?? ''), status: String(row.status ?? ''), payment_status: String(row.is_paid ?? ''), customer_id: String(row.customer_id ?? ''), store_id: String(row.store_id ?? ''), revenue_amount: amount, raw_payload: row };\n});\nconst sourceMetadata = [...pages.entries()].sort(([a], [b]) => a - b).map(([page, body]) => ({ page_index: page, http_status_code: 200, current_page: body.meta.current_page, last_page: body.meta.last_page, per_page: body.meta.per_page, total: body.meta.total }));\nreturn [{ json: { source_scope: config.source_scope, business_date: config.business_date, report_row_count: normalized.length, page_count: lastPage, revenue_field: config.revenue_field, record_key_fields_json: JSON.stringify(config.record_key_fields), row_grain: config.row_grain, wunpaid: config.wunpaid, amount_basis: config.amount_basis, calculation_version: config.calculation_version, source_endpoint: config.source_endpoint, source_fetched_at: config.source_fetched_at, rows_json: JSON.stringify(normalized), source_metadata_json: JSON.stringify(sourceMetadata) } }];"
+      },
+      "id": "8de1dd90-9e3a-4667-856f-a2909f90dd3b",
+      "name": "Gabungkan & Normalisasi Snapshot PostgreSQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5952,
+        64
       ]
     }
   ],
@@ -308,7 +364,40 @@
       "main": [
         [
           {
-            "node": "Validasi & Normalisasi Sales Details",
+            "node": "Ambil Sales Details Olsera - Halaman 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalisasi Snapshot Sales untuk PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Simpan Snapshot Harian ke PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ambil Sales Details Olsera - Halaman 2": {
+      "main": [
+        [
+          {
+            "node": "Gabungkan & Normalisasi Snapshot PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gabungkan & Normalisasi Snapshot PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Simpan Snapshot Harian ke PostgreSQL",
             "type": "main",
             "index": 0
           }
