@@ -31,6 +31,9 @@ services:
       OLSERA_APP_ID: "${OLSERA_APP_ID}"
       OLSERA_SECRET_KEY: "${OLSERA_SECRET_KEY}"
 
+      # xAI / Grok Imagine (video terima kasih harian)
+      XAI_API_KEY: "${XAI_API_KEY}"
+
       # Izinkan workflow membaca environment variable
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
 

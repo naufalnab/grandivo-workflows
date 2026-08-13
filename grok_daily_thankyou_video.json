@@ -1,0 +1,661 @@
+{
+  "name": "Video Terima Kasih Harian Grok - Grandivo",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8f3a1c2e-4b5d-4e6f-9a10-111213141516",
+      "name": "Jalankan Manual untuk Pengujian",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 160]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "9a4b2d3e-5c6f-4a70-8b21-222324252627",
+      "name": "Jadwal 08:00 WIB",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "const CONFIG = {\n  // Isi keduanya untuk uji tanpa Olsera. Kosongkan di produksi.\n  MANUAL_CUSTOMER_NAME: '',\n  MANUAL_PRODUCT_NAME: '',\n  MANUAL_BUSINESS_DATE: '',\n  LOOKBACK_DAYS: 1,\n  WUNPAID: '0',\n  PER_PAGE: 50,\n  TIMEZONE: 'Asia/Jakarta',\n  SOURCE_ENDPOINT: 'https://api-open.olsera.co.id/api/open-api/v1/en/report/salesdetails',\n  VIDEO_MODEL: 'grok-imagine-video-1.5',\n  CHAT_MODEL: 'grok-4.6',\n  VIDEO_DURATION: 8,\n  VIDEO_ASPECT_RATIO: '9:16',\n  VIDEO_RESOLUTION: '720p',\n  MAX_POLLS: 30,\n  POLL_SECONDS: 20,\n};\n\nconst xaiKey = String($env.XAI_API_KEY ?? '').trim();\nif (!xaiKey) {\n  throw new Error('XAI_API_KEY belum diisi pada environment stack n8n.');\n}\n\nconst ymdInTimezone = (date) => {\n  const parts = new Intl.DateTimeFormat('en-CA', {\n    timeZone: CONFIG.TIMEZONE,\n    year: 'numeric',\n    month: '2-digit',\n    day: '2-digit',\n  }).formatToParts(date);\n  const values = Object.fromEntries(\n    parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])\n  );\n  return values.year + '-' + values.month + '-' + values.day;\n};\n\nconst isStrictYmd = (value) => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(value || ''));\n\nlet businessDate = String(CONFIG.MANUAL_BUSINESS_DATE || '').trim();\nif (businessDate && !isStrictYmd(businessDate)) {\n  throw new Error('MANUAL_BUSINESS_DATE harus berformat YYYY-MM-DD.');\n}\n\nif (!businessDate) {\n  const today = ymdInTimezone(new Date());\n  const cursor = new Date(today + 'T12:00:00+07:00');\n  cursor.setUTCDate(cursor.getUTCDate() - CONFIG.LOOKBACK_DAYS);\n  businessDate = ymdInTimezone(cursor);\n}\n\nconst manualCustomer = String(CONFIG.MANUAL_CUSTOMER_NAME || '').trim();\nconst manualProduct = String(CONFIG.MANUAL_PRODUCT_NAME || '').trim();\nconst useManual = Boolean(manualCustomer && manualProduct);\n\nif ((manualCustomer && !manualProduct) || (!manualCustomer && manualProduct)) {\n  throw new Error('Isi MANUAL_CUSTOMER_NAME dan MANUAL_PRODUCT_NAME bersamaan, atau kosongkan keduanya.');\n}\n\nreturn [{\n  json: {\n    use_manual: useManual,\n    skipped: false,\n    business_date: businessDate,\n    customer_name: manualCustomer,\n    product_name: manualProduct,\n    wunpaid: CONFIG.WUNPAID,\n    per_page: CONFIG.PER_PAGE,\n    source_endpoint: CONFIG.SOURCE_ENDPOINT,\n    timezone: CONFIG.TIMEZONE,\n    video_model: CONFIG.VIDEO_MODEL,\n    chat_model: CONFIG.CHAT_MODEL,\n    video_duration: CONFIG.VIDEO_DURATION,\n    video_aspect_ratio: CONFIG.VIDEO_ASPECT_RATIO,\n    video_resolution: CONFIG.VIDEO_RESOLUTION,\n    max_polls: CONFIG.MAX_POLLS,\n    poll_seconds: CONFIG.POLL_SECONDS,\n  },\n}];"
+      },
+      "id": "c37e5061-8f92-4da3-be54-555657585960",
+      "name": "Tanggal Bisnis & Konfigurasi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 260],
+      "notes": "Untuk uji cepat, isi MANUAL_CUSTOMER_NAME dan MANUAL_PRODUCT_NAME. Produksi memakai Sales details Olsera tanggal kemarin."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "use-manual-mode",
+              "leftValue": "={{ $json.use_manual }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a01b2c3d-4e5f-6071-8293-a4b5c6d7e8f9",
+      "name": "Mode Manual?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [720, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-open.olsera.co.id/api/open-api/v1/id/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "app_id",
+              "value": "={{ $env.OLSERA_APP_ID }}"
+            },
+            {
+              "name": "secret_key",
+              "value": "={{ $env.OLSERA_SECRET_KEY }}"
+            },
+            {
+              "name": "grant_type",
+              "value": "secret_key"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "a15c3e4f-6d70-4b81-9c32-333435363738",
+      "name": "Ambil Access Token Olsera",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [960, 400],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst rawToken =\n  response?.access_token ??\n  response?.data?.access_token ??\n  response?.result?.access_token ??\n  response?.token?.access_token ??\n  response?.data?.token;\n\nif (!rawToken || !String(rawToken).trim()) {\n  throw new Error(\n    'Access token tidak ditemukan pada respons Olsera. Field tingkat atas: ' +\n    (Object.keys(response ?? {}).join(', ') || '(kosong)') + '.'\n  );\n}\n\nconst accessToken = String(rawToken).trim().replace(/^Bearer\\s+/i, '');\nif (!accessToken) {\n  throw new Error('Access token Olsera kosong setelah normalisasi.');\n}\n\nconst config = $('Tanggal Bisnis & Konfigurasi').first().json;\nreturn [{ json: { ...config, access_token: accessToken } }];"
+      },
+      "id": "b26d4f50-7e81-4c92-ad43-444546474849",
+      "name": "Validasi Access Token Olsera",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.source_endpoint }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "from",
+              "value": "={{ $json.business_date }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $json.business_date }}"
+            },
+            {
+              "name": "per_page",
+              "value": "={{ String($json.per_page) }}"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "wunpaid",
+              "value": "={{ $json.wunpaid }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + String($json.access_token).trim() }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "d48f6172-90a3-4eb4-cf65-666768697071",
+      "name": "Ambil Sales Details Olsera",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1440, 400],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "Mengambil Sales details tanggal bisnis kemarin. Hanya halaman pertama dipakai untuk memilih satu pembelian featured."
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst config = $('Tanggal Bisnis & Konfigurasi').first().json;\n\nconst firstDefined = (...values) =>\n  values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');\n\nconst toText = (...values) => {\n  const value = firstDefined(...values);\n  return value === undefined ? '' : String(value).trim();\n};\n\nconst readPath = (source, path) => {\n  return String(path).split('.').reduce((acc, key) => {\n    if (acc === undefined || acc === null) return undefined;\n    return acc[key];\n  }, source);\n};\n\nconst TITLE_SKIP = new Set([\n  'bapak', 'ibu', 'pak', 'bu', 'kak', 'mas', 'mba', 'mbak',\n  'sdr', 'sdri', 'tn', 'ny', 'bpk', 'bpk.', 'ibu.',\n]);\n\nconst toFirstName = (fullName) => {\n  const cleaned = String(fullName || '')\n    .replace(/[^A-Za-zÀ-ÿ' .\\-]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n  if (!cleaned) return '';\n  const parts = cleaned.split(' ').filter(Boolean);\n  const picked = TITLE_SKIP.has(parts[0].toLowerCase()) ? (parts[1] || '') : parts[0];\n  if (!picked || picked.length < 2) return '';\n  return picked.charAt(0).toUpperCase() + picked.slice(1).toLowerCase();\n};\n\nconst cleanProduct = (name) => {\n  const cleaned = String(name || '').replace(/\\s+/g, ' ').trim();\n  if (!cleaned) return '';\n  return cleaned.length > 80 ? cleaned.slice(0, 77).trim() + '...' : cleaned;\n};\n\nconst looksCancelled = (row) => {\n  const blob = [\n    row?.status,\n    row?.order_status,\n    row?.payment_status,\n    row?.pay_status,\n    row?.state,\n  ].map((value) => String(value || '').toLowerCase()).join(' ');\n  return /cancel|batal|void|refund|unpaid|belum\\s*bayar/.test(blob);\n};\n\nconst listCandidates = [\n  response,\n  response?.data,\n  response?.data?.data,\n  response?.result,\n  response?.items,\n  response?.rows,\n  response?.orders,\n  response?.data?.items,\n  response?.data?.rows,\n  response?.data?.orders,\n  response?.data?.result,\n];\nconst rows = listCandidates.find((value) => Array.isArray(value)) || [];\n\nconst purchases = [];\nfor (const row of rows) {\n  if (!row || typeof row !== 'object' || looksCancelled(row)) continue;\n\n  const customerRaw = toText(\n    row.customer_name,\n    row.cust_name,\n    row.buyer_name,\n    row.member_name,\n    row.nama_pelanggan,\n    row.customer?.name,\n    row.customer?.customer_name,\n    row.member?.name,\n    readPath(row, 'customer.fullname')\n  );\n  const productRaw = toText(\n    row.product_name,\n    row.item_name,\n    row.sku_name,\n    row.nama_produk,\n    row.product?.name,\n    row.item?.name,\n    row.item?.product_name,\n    readPath(row, 'items.0.product_name'),\n    readPath(row, 'items.0.name')\n  );\n\n  const customerName = toFirstName(customerRaw);\n  const productName = cleanProduct(productRaw);\n  if (!customerName || !productName) continue;\n\n  purchases.push({\n    customer_name: customerName,\n    product_name: productName,\n    order_no: toText(row.order_no, row.order_number, row.invoice_no, row.nota_no, row.id),\n  });\n}\n\nif (purchases.length === 0) {\n  return [{\n    json: {\n      ...config,\n      skipped: true,\n      skip_reason: 'Tidak ada pembelian berbayar dengan nama pelanggan dan produk yang bisa dipakai pada ' + config.business_date + '.',\n      candidate_count: rows.length,\n      top_level_fields: Object.keys(response ?? {}),\n    },\n  }];\n}\n\nconst featured = purchases[0];\nconst thankyouText =\n  'Terima kasih kak ' + featured.customer_name +\n  ' yang telah membeli ' + featured.product_name +\n  ' di Grandivo, semoga bermanfaat.';\n\nreturn [{\n  json: {\n    ...config,\n    skipped: false,\n    customer_name: featured.customer_name,\n    product_name: featured.product_name,\n    order_no: featured.order_no,\n    purchase_count: purchases.length,\n    source: 'olsera-salesdetails',\n    thankyou_text: thankyouText,\n  },\n}];"
+      },
+      "id": "e5907283-a1b4-4fc5-d076-777879808182",
+      "name": "Pilih Pembelian Featured",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 400],
+      "notes": "Hanya nama depan yang dipakai. Baris tanpa nama/produk atau yang berstatus batal/unpaid dilewati."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-purchase",
+              "leftValue": "={{ $json.skipped }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b12c3d4e-5f60-7182-93a4-b5c6d7e8f901",
+      "name": "Ada Pembelian?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1920, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst TITLE_SKIP = new Set([\n  'bapak', 'ibu', 'pak', 'bu', 'kak', 'mas', 'mba', 'mbak',\n  'sdr', 'sdri', 'tn', 'ny', 'bpk', 'bpk.', 'ibu.',\n]);\n\nconst toFirstName = (fullName) => {\n  const cleaned = String(fullName || '')\n    .replace(/[^A-Za-zÀ-ÿ' .\\-]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n  if (!cleaned) return '';\n  const parts = cleaned.split(' ').filter(Boolean);\n  const picked = TITLE_SKIP.has(parts[0].toLowerCase()) ? (parts[1] || '') : parts[0];\n  if (!picked || picked.length < 2) return '';\n  return picked.charAt(0).toUpperCase() + picked.slice(1).toLowerCase();\n};\n\nconst customerName = toFirstName(input.customer_name);\nconst productName = String(input.product_name || '').replace(/\\s+/g, ' ').trim();\nif (!customerName || !productName) {\n  throw new Error('Nama pelanggan atau produk kosong sebelum meminta naskah Grok.');\n}\n\nconst thankyouText =\n  input.thankyou_text ||\n  ('Terima kasih kak ' + customerName + ' yang telah membeli ' + productName + ' di Grandivo, semoga bermanfaat.');\n\nreturn [{\n  json: {\n    ...input,\n    customer_name: customerName,\n    product_name: productName,\n    thankyou_text: thankyouText,\n    source: input.source || 'manual',\n  },\n}];"
+      },
+      "id": "c23d4e5f-6071-8293-a4b5-c6d7e8f90112",
+      "name": "Normalisasi Nama & Naskah",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2160, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.x.ai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + String($env.XAI_API_KEY).trim() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": {{ JSON.stringify($json.chat_model) }},\n  \"temperature\": 0.4,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You write short Indonesian retail video briefs for Grandivo. Return JSON only. Do not invent extra customer facts. Keep the thank-you sentence exactly as given.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify('Buat brief video ucapan terima kasih Grandivo.\\nKalimat wajib di layar dan diucapkan persis: ' + $json.thankyou_text + '\\nNama depan: ' + $json.customer_name + '\\nProduk: ' + $json.product_name + '\\nDurasi: ' + String($json.video_duration) + ' detik, rasio ' + $json.video_aspect_ratio + '.\\nKembalikan JSON dengan kunci: on_screen_text, spoken_script, video_prompt.\\nvideo_prompt harus berbahasa Inggris, sinematik, vertikal, menampilkan teks on_screen_text dengan jelas, host ramah mengucapkan spoken_script dalam bahasa Indonesia, estetika toko gadget modern, tanpa merek lain, tanpa teks tambahan.') }}\n    }\n  ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "f6a18394-b2c5-40d6-e187-888990919293",
+      "name": "Tulis Prompt Video dengan Grok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2400, 200],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prepared = $('Normalisasi Nama & Naskah').first().json;\nconst content = String(\n  response?.choices?.[0]?.message?.content ??\n  response?.output_text ??\n  ''\n).trim();\n\nlet parsed = {};\nif (content) {\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try {\n      parsed = JSON.parse(match[0]);\n    } catch (error) {\n      parsed = {};\n    }\n  }\n}\n\nconst thankyouText = prepared.thankyou_text;\nconst onScreenText = String(parsed.on_screen_text || thankyouText).trim();\nconst spokenScript = String(parsed.spoken_script || thankyouText).trim();\nlet videoPrompt = String(parsed.video_prompt || '').trim();\n\nif (!videoPrompt) {\n  videoPrompt =\n    'Vertical 9:16 cinematic commercial for Grandivo, a modern Indonesian electronics store. ' +\n    'Warm lighting, clean gadget boutique, friendly host facing camera. ' +\n    'Large readable Indonesian on-screen text exactly: \\\"' + thankyouText + '\\\". ' +\n    'The host speaks the same sentence in warm natural Indonesian. ' +\n    'No extra captions, no other brand logos, no invented customer details.';\n}\n\nif (!onScreenText.includes(prepared.customer_name) || !onScreenText.toLowerCase().includes('grandivo')) {\n  throw new Error('Naskah Grok tidak mengandung nama pelanggan atau Grandivo.');\n}\n\nreturn [{\n  json: {\n    ...prepared,\n    on_screen_text: onScreenText,\n    spoken_script: spokenScript,\n    video_prompt: videoPrompt,\n    grok_chat_model: response?.model || prepared.chat_model,\n  },\n}];"
+      },
+      "id": "07b294a5-c3d6-41e7-f298-999001021304",
+      "name": "Validasi Naskah Grok",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.x.ai/v1/videos/generations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + String($env.XAI_API_KEY).trim() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": {{ JSON.stringify($json.video_model) }},\n  \"prompt\": {{ JSON.stringify($json.video_prompt) }},\n  \"duration\": {{ Number($json.video_duration) }},\n  \"aspect_ratio\": {{ JSON.stringify($json.video_aspect_ratio) }},\n  \"resolution\": {{ JSON.stringify($json.video_resolution) }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "18c3a5b6-d4e7-42f8-03a9-000112132415",
+      "name": "Generate Video Grok Imagine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2880, 200],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 8000,
+      "notes": "Text-to-video Grok Imagine. Respons awal hanya request_id; video diambil lewat polling."
+    },
+    {
+      "parameters": {
+        "jsCode": "const generated = $input.first().json;\nconst prepared = $('Validasi Naskah Grok').first().json;\nconst requestId = String(\n  generated.request_id ||\n  generated.id ||\n  generated?.data?.request_id ||\n  generated?.data?.id ||\n  ''\n).trim();\n\nif (!requestId) {\n  throw new Error(\n    'request_id video Grok tidak ditemukan. Field tingkat atas: ' +\n    (Object.keys(generated ?? {}).join(', ') || '(kosong)') + '.'\n  );\n}\n\nreturn [{\n  json: {\n    ...prepared,\n    request_id: requestId,\n    poll_count: 0,\n    continue_poll: true,\n    video_status: 'pending',\n  },\n}];"
+      },
+      "id": "29d4b6c7-e5f8-4309-14ba-111223243526",
+      "name": "Siapkan Polling Video",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3120, 200]
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "id": "3ae5c7d8-f609-441a-25cb-222334354637",
+      "name": "Tunggu Proses Video",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [3360, 200]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.x.ai/v1/videos/{{ $json.request_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + String($env.XAI_API_KEY).trim() }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "4bf6d8e9-071a-452b-36dc-333445465748",
+      "name": "Cek Status Video Grok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3600, 200],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const statusPayload = $input.first().json;\nconst waiting = $('Tunggu Proses Video').first().json;\nconst status = String(\n  statusPayload.status ||\n  statusPayload?.data?.status ||\n  ''\n).toLowerCase();\nconst pollCount = Number(waiting.poll_count || 0) + 1;\nconst maxPolls = Number(waiting.max_polls || 30);\n\nif (status === 'done') {\n  const videoUrl = String(\n    statusPayload?.video?.url ||\n    statusPayload?.data?.video?.url ||\n    statusPayload?.url ||\n    statusPayload?.data?.url ||\n    ''\n  ).trim();\n  if (!videoUrl) {\n    throw new Error('Video Grok berstatus done tetapi URL kosong.');\n  }\n  return [{\n    json: {\n      ...waiting,\n      poll_count: pollCount,\n      continue_poll: false,\n      skipped: false,\n      video_status: 'done',\n      video_url: videoUrl,\n      video_duration_result: statusPayload?.video?.duration ?? statusPayload?.data?.video?.duration ?? waiting.video_duration,\n    },\n  }];\n}\n\nif (status === 'failed' || status === 'expired') {\n  const message = statusPayload?.error?.message || statusPayload?.data?.error?.message || status;\n  throw new Error('Generate video Grok gagal (' + status + '): ' + message);\n}\n\nif (pollCount >= maxPolls) {\n  throw new Error(\n    'Video Grok belum selesai setelah ' + pollCount +\n    ' kali cek. request_id=' + waiting.request_id\n  );\n}\n\nreturn [{\n  json: {\n    ...waiting,\n    poll_count: pollCount,\n    continue_poll: true,\n    video_status: status || 'pending',\n  },\n}];"
+      },
+      "id": "5c07e9fa-182b-463c-47ed-444556576859",
+      "name": "Evaluasi Status Video",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3840, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "continue-poll",
+              "leftValue": "={{ $json.continue_poll }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6d18fa0b-293c-474d-58fe-555667687960",
+      "name": "Masih Diproses?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4080, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\n\nif (input.skipped) {\n  return [{\n    json: {\n      status: 'SKIPPED',\n      message: input.skip_reason || 'Tidak ada video yang dibuat.',\n      business_date: input.business_date,\n      candidate_count: input.candidate_count || 0,\n      synced_at_wib: timestamp,\n    },\n  }];\n}\n\nif (!input.video_url) {\n  throw new Error('Workflow selesai tanpa video_url.');\n}\n\nreturn [{\n  json: {\n    status: 'SUCCESS',\n    message: 'Video terima kasih harian siap.',\n    business_date: input.business_date,\n    customer_name: input.customer_name,\n    product_name: input.product_name,\n    thankyou_text: input.thankyou_text,\n    video_url: input.video_url,\n    request_id: input.request_id,\n    video_model: input.video_model,\n    poll_count: input.poll_count,\n    source: input.source,\n    synced_at_wib: timestamp,\n    note: 'URL video xAI bersifat sementara. Unduh segera jika perlu disimpan.',\n  },\n}];"
+      },
+      "id": "7e290b1c-3a4d-485e-690f-666778798071",
+      "name": "Ringkasan Video Harian",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4320, 360]
+    }
+  ],
+  "connections": {
+    "Jalankan Manual untuk Pengujian": {
+      "main": [
+        [
+          {
+            "node": "Tanggal Bisnis & Konfigurasi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jadwal 08:00 WIB": {
+      "main": [
+        [
+          {
+            "node": "Tanggal Bisnis & Konfigurasi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tanggal Bisnis & Konfigurasi": {
+      "main": [
+        [
+          {
+            "node": "Mode Manual?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mode Manual?": {
+      "main": [
+        [
+          {
+            "node": "Normalisasi Nama & Naskah",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ambil Access Token Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ambil Access Token Olsera": {
+      "main": [
+        [
+          {
+            "node": "Validasi Access Token Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validasi Access Token Olsera": {
+      "main": [
+        [
+          {
+            "node": "Ambil Sales Details Olsera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ambil Sales Details Olsera": {
+      "main": [
+        [
+          {
+            "node": "Pilih Pembelian Featured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilih Pembelian Featured": {
+      "main": [
+        [
+          {
+            "node": "Ada Pembelian?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada Pembelian?": {
+      "main": [
+        [
+          {
+            "node": "Normalisasi Nama & Naskah",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ringkasan Video Harian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalisasi Nama & Naskah": {
+      "main": [
+        [
+          {
+            "node": "Tulis Prompt Video dengan Grok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tulis Prompt Video dengan Grok": {
+      "main": [
+        [
+          {
+            "node": "Validasi Naskah Grok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validasi Naskah Grok": {
+      "main": [
+        [
+          {
+            "node": "Generate Video Grok Imagine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Video Grok Imagine": {
+      "main": [
+        [
+          {
+            "node": "Siapkan Polling Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siapkan Polling Video": {
+      "main": [
+        [
+          {
+            "node": "Tunggu Proses Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tunggu Proses Video": {
+      "main": [
+        [
+          {
+            "node": "Cek Status Video Grok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek Status Video Grok": {
+      "main": [
+        [
+          {
+            "node": "Evaluasi Status Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluasi Status Video": {
+      "main": [
+        [
+          {
+            "node": "Masih Diproses?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Masih Diproses?": {
+      "main": [
+        [
+          {
+            "node": "Tunggu Proses Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ringkasan Video Harian",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

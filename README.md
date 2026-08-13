@@ -11,6 +11,7 @@ Repositori ini berisi workflow n8n dan konfigurasi Docker Swarm untuk otomasi op
 - `olsera_daily_revenue_to_postgres.json`: workflow Sales details dan omzet harian Olsera.
 - `n8n-olsera-env-snippet.yml`: potongan environment untuk autentikasi Olsera pada stack n8n.
 - `instagram.json`: workflow validasi consent pelanggan dan publikasi Instagram.
+- `grok_daily_thankyou_video.json`: workflow video terima kasih harian via Grok Imagine.
 - `.env.example`: contoh variabel non-rahasia untuk stack PostgreSQL.
 
 ## 1. Menyiapkan PostgreSQL di Portainer
@@ -144,6 +145,7 @@ services:
     environment:
       OLSERA_APP_ID: ${OLSERA_APP_ID}
       OLSERA_SECRET_KEY: ${OLSERA_SECRET_KEY}
+      XAI_API_KEY: ${XAI_API_KEY}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
 ```
 
@@ -152,6 +154,7 @@ Di bagian **Environment variables** stack Portainer, isi:
 ```text
 OLSERA_APP_ID=<app_id dari Olsera Console>
 OLSERA_SECRET_KEY=<secret_key dari Olsera Console>
+XAI_API_KEY=<API key xAI untuk Grok>
 ```
 
 Jangan menaruh nilainya di GitHub. Update/redeploy stack n8n setelah variabel ditambahkan.
@@ -261,9 +264,12 @@ Manual/Schedule 00:15 WIB
 Tiga hari terakhir ditarik ulang agar perubahan terlambat dapat dikoreksi. Satu
 tanggal hanya diganti jika respons sukses dan halaman terakhir dapat dibuktikan dari
 `meta.current_page/last_page`, `links.next`/`next_page_url`, `meta.total` yang cocok,
-atau halaman akhir yang lebih pendek dari `per_page`. Pagination HTTP berhenti kecuali
-ada sinyal eksplisit halaman berikutnya (mencegah loop respons identik). Setelah konfigurasi
-produksi lengkap, respons kosong yang tervalidasi menjadi omzet `0`; respons error,
+atau halaman akhir yang lebih pendek dari `per_page`. Pagination HTTP memakai query
+`page={{ $pageCount + 1 }}` dengan tipe `qs`, lalu berhenti kecuali ada sinyal
+eksplisit halaman berikutnya (`current < last`, `links.next`, `next_page_url`, atau
+`total` yang belum tercapai). Tanpa tipe `qs`, n8n tidak mengubah query string dan
+mengulang halaman 1 sampai proteksi respons identik. Setelah konfigurasi produksi
+lengkap, respons kosong yang tervalidasi menjadi omzet `0`; respons error,
 wrapper tidak dikenal, atau pagination meragukan tidak menulis DB.
 
 ### Siapkan database
@@ -360,6 +366,72 @@ Sebelum mengaktifkan `instagram.json`:
 
 Workflow masih memublikasikan otomatis setelah data dan consent lolos validasi. Tambahkan
 approval step bila tim Grandivo perlu memeriksa caption atau gambar terlebih dahulu.
+
+## 6. Video terima kasih harian Grok
+
+Workflow `grok_daily_thankyou_video.json` membuat satu video vertikal per hari:
+
+```text
+Terima kasih kak {X} yang telah membeli {Y} di Grandivo, semoga bermanfaat.
+```
+
+`X` adalah nama depan pembeli, `Y` adalah nama produk. Workflow **tidak** memublikasikan
+ke Instagram. Video berisi nama pelanggan, jadi publikasi tetap butuh consent terpisah
+seperti di `instagram.json`.
+
+### Environment
+
+Selain kredensial Olsera, tambahkan `XAI_API_KEY` pada stack n8n lalu update/redeploy.
+Workflow gagal di awal jika kunci itu kosong.
+
+### Import dan uji
+
+1. Import `grok_daily_thankyou_video.json`.
+2. Jangan aktifkan jadwal.
+3. Untuk uji tanpa menunggu penjualan nyata, buka **Tanggal Bisnis & Konfigurasi** lalu isi:
+
+```text
+MANUAL_CUSTOMER_NAME: 'Andi'
+MANUAL_PRODUCT_NAME: 'Kabel Data USB-C'
+```
+
+4. Jalankan **Jalankan Manual untuk Pengujian**.
+5. Setelah hasil benar, kosongkan kedua field manual dan aktifkan workflow.
+
+Jadwal default: `0 8 * * *` (08:00 WIB). Timezone workflow `Asia/Jakarta`. Produksi
+mengambil Sales details tanggal kemarin, memilih satu pembelian berbayar yang punya
+nama pelanggan dan produk, lalu membuat satu video.
+
+Alur:
+
+```text
+Manual/Schedule 08:00 WIB
+→ tanggal bisnis & konfigurasi
+→ token Olsera (dilewati jika mode manual)
+→ Sales details kemarin
+→ pilih satu pembelian featured
+→ Grok menulis brief video
+→ Grok Imagine generate video 8 detik 9:16 720p
+→ poll status sampai done
+→ ringkasan + URL video
+```
+
+Endpoint:
+
+```text
+POST https://api-open.olsera.co.id/api/open-api/v1/id/token
+GET  https://api-open.olsera.co.id/api/open-api/v1/en/report/salesdetails
+POST https://api.x.ai/v1/chat/completions
+POST https://api.x.ai/v1/videos/generations
+GET  https://api.x.ai/v1/videos/{request_id}
+```
+
+Parser Sales details defensif: beberapa kandidat field nama pelanggan/produk dicoba.
+Baris batal, void, refund, atau unpaid dilewati. Nama tamu/kosong dilewati. Hanya nama
+depan yang masuk naskah.
+
+Jika tidak ada pembelian yang memenuhi syarat, eksekusi berstatus `SKIPPED` dan tidak
+memanggil xAI. URL video xAI bersifat sementara; unduh segera jika perlu disimpan.
 
 ## Backup minimum
 
