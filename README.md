@@ -333,7 +333,8 @@ SELECT
     revenue_amount,
     revenue_field,
     status,
-    payment_status
+    payment_status,
+    payment_method
 FROM public.olsera_sales_detail_rows
 ORDER BY source_scope, business_date DESC, record_key
 LIMIT 100;

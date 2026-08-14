@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.olsera_sales_detail_rows (
     source_timestamp_raw TEXT,
     status TEXT,
     payment_status TEXT,
+    payment_method TEXT,
     customer_id TEXT,
     store_id TEXT,
     revenue_amount NUMERIC NOT NULL,
@@ -27,6 +28,9 @@ CREATE TABLE IF NOT EXISTS public.olsera_sales_detail_rows (
         CHECK (jsonb_typeof(raw_payload) = 'object'),
     UNIQUE (source_scope, business_date, record_key)
 );
+
+ALTER TABLE IF EXISTS public.olsera_sales_detail_rows
+    ADD COLUMN IF NOT EXISTS payment_method TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_olsera_sales_detail_rows_scope_date
     ON public.olsera_sales_detail_rows (source_scope, business_date DESC);
@@ -64,6 +68,12 @@ CREATE TABLE IF NOT EXISTS public.olsera_daily_revenue (
 
 COMMENT ON TABLE public.olsera_sales_detail_rows IS
     'Rows returned by the Olsera Sales details report. The API documentation does not guarantee that one row equals one order.';
+
+COMMENT ON COLUMN public.olsera_sales_detail_rows.payment_status IS
+    'Verbatim payment status returned by Olsera (e.g. is_paid/payment_status).';
+
+COMMENT ON COLUMN public.olsera_sales_detail_rows.payment_method IS
+    'Payment method or payment channel extracted from the Olsera sales detail row.';
 
 COMMENT ON COLUMN public.olsera_sales_detail_rows.revenue_amount IS
     'Exact decimal read from the explicitly configured revenue_field; no locale or floating-point conversion is applied.';
@@ -250,6 +260,7 @@ BEGIN
         source_timestamp_raw,
         status,
         payment_status,
+        payment_method,
         customer_id,
         store_id,
         revenue_amount,
@@ -269,6 +280,7 @@ BEGIN
         NULLIF(entry.value ->> 'source_timestamp_raw', ''),
         NULLIF(BTRIM(entry.value ->> 'status'), ''),
         NULLIF(BTRIM(entry.value ->> 'payment_status'), ''),
+        NULLIF(BTRIM(entry.value ->> 'payment_method'), ''),
         NULLIF(BTRIM(entry.value ->> 'customer_id'), ''),
         NULLIF(BTRIM(entry.value ->> 'store_id'), ''),
         (entry.value ->> 'revenue_amount')::NUMERIC,
@@ -286,6 +298,7 @@ BEGIN
         source_timestamp_raw = EXCLUDED.source_timestamp_raw,
         status = EXCLUDED.status,
         payment_status = EXCLUDED.payment_status,
+        payment_method = EXCLUDED.payment_method,
         customer_id = EXCLUDED.customer_id,
         store_id = EXCLUDED.store_id,
         revenue_amount = EXCLUDED.revenue_amount,
