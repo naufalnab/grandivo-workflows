@@ -1,6 +1,6 @@
-# Grandivo Product Dashboard
+# Grandivo Executive Sales & Product Dashboard
 
-Dashboard read-only untuk melihat isi tabel `products` yang disinkronkan dari Olsera.
+Dashboard read-only untuk memantau ringkasan omzet penjualan, rincian kanal/metode pembayaran (*Payment By Method*), dan katalog produk hasil sinkronisasi Olsera POS ke PostgreSQL.
 
 Arsitektur:
 
@@ -16,14 +16,22 @@ PostgREST tidak dipublish langsung ke internet. Nginx meneruskan `/api/*` secara
 
 ## Fitur
 
-- ringkasan total produk, produk aktif, total stok, nilai modal stok, dan waktu sync terakhir;
-- pencarian nama/SKU/Olsera ID/kategori/brand;
-- filter kategori, brand, status, stok rendah, dan stok habis;
-- sorting harga/stok/nama/waktu update;
-- pagination 50 produk per halaman;
-- detail `raw_payload` Olsera untuk troubleshooting;
-- export hasil filter ke CSV;
-- API memakai role PostgreSQL read-only.
+- **Daily Sales Closing & Payment Breakdown** (Sesuai format resmi ringkasan penutupan harian Olsera):
+  - Ringkasan omzet total, total transaksi, kanal pembayaran terbesar, dan rata-rata order (AOV);
+  - Daftar visual per metode pembayaran (CASH, EDC, QRIS, Marketplace Shopee/Tokopedia, Kredivo/Paylater) dengan persentase & bar progress;
+  - Baris Total - IDR dengan nominal terformat rapi;
+  - Filter tanggal bisnis (Hari ini, kemarin, per tanggal, atau rentang waktu);
+  - Tombol **Salin Closing Summary** format teks WhatsApp/Email siap kirim;
+  - Tabel rincian seluruh transaksi dengan modal payload audit JSON Olsera.
+- **Katalog Produk**:
+  - Total produk, produk aktif, total unit stok, nilai modal inventaris;
+  - Pencarian multi-field (nama, SKU, ID, kategori, brand);
+  - Filter kategori, brand, status stok (stok rendah / stok habis);
+  - Detail spesifikasi produk & payload Olsera asli;
+  - Export data ke CSV.
+- **Sistem & Desain**:
+  - Dukungan Dark Mode / Light Mode otomatis;
+  - API aman menggunakan role PostgreSQL read-only (`grandivo_viewer`).
 
 ## 1. Buat role PostgreSQL read-only
 
@@ -39,7 +47,7 @@ Masuk ke console container PostgreSQL Grandivo dan buka psql:
 psql -U grandivo_sync -d grandivo
 ```
 
-Lalu jalankan SQL berikut. Ganti `PASSWORD_RANDOM_DARI_OPENSSL` dengan password yang baru dibuat.
+Lalu jalankan SQL berikut (atau jalankan script `dashboard-readonly.sql`):
 
 ```sql
 CREATE ROLE grandivo_viewer NOLOGIN;
@@ -47,6 +55,10 @@ CREATE ROLE grandivo_dashboard LOGIN PASSWORD 'PASSWORD_RANDOM_DARI_OPENSSL';
 
 GRANT USAGE ON SCHEMA public TO grandivo_viewer;
 GRANT SELECT ON TABLE public.products TO grandivo_viewer;
+GRANT SELECT ON TABLE public.olsera_sales_detail_rows TO grandivo_viewer;
+GRANT SELECT ON TABLE public.olsera_daily_revenue TO grandivo_viewer;
+GRANT SELECT ON TABLE public.v_olsera_daily_revenue TO grandivo_viewer;
+GRANT SELECT ON TABLE public.v_olsera_sales_by_payment_method TO grandivo_viewer;
 GRANT grandivo_viewer TO grandivo_dashboard;
 
 ALTER ROLE grandivo_dashboard SET statement_timeout = '10s';

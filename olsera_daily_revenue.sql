@@ -412,3 +412,18 @@ SELECT
     source_fetched_at,
     synced_at
 FROM public.olsera_daily_revenue;
+
+CREATE OR REPLACE VIEW public.v_olsera_sales_by_payment_method AS
+SELECT
+    source_scope,
+    business_date,
+    COALESCE(NULLIF(BTRIM(payment_method), ''), 'Lainnya / Tidak Disebutkan') AS payment_method,
+    COUNT(*)::INTEGER AS transaction_count,
+    COALESCE(SUM(revenue_amount), 0)::NUMERIC AS total_revenue,
+    MIN(source_timestamp_raw) AS min_timestamp,
+    MAX(source_timestamp_raw) AS max_timestamp
+FROM public.olsera_sales_detail_rows
+GROUP BY source_scope, business_date, COALESCE(NULLIF(BTRIM(payment_method), ''), 'Lainnya / Tidak Disebutkan');
+
+COMMENT ON VIEW public.v_olsera_sales_by_payment_method IS
+    'Aggregated daily revenue and transaction count per payment method for reporting and dashboards.';

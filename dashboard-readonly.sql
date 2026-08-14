@@ -29,6 +29,10 @@ ALTER ROLE grandivo_dashboard PASSWORD :'dashboard_password';
 
 GRANT USAGE ON SCHEMA public TO grandivo_viewer;
 GRANT SELECT ON TABLE public.products TO grandivo_viewer;
+GRANT SELECT ON TABLE public.olsera_sales_detail_rows TO grandivo_viewer;
+GRANT SELECT ON TABLE public.olsera_daily_revenue TO grandivo_viewer;
+GRANT SELECT ON TABLE public.v_olsera_daily_revenue TO grandivo_viewer;
+GRANT SELECT ON TABLE public.v_olsera_sales_by_payment_method TO grandivo_viewer;
 GRANT grandivo_viewer TO grandivo_dashboard;
 
 -- Keep API requests bounded and read-only at the database role level.
