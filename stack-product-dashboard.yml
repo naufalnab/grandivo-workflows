@@ -50,6 +50,9 @@ services:
         - "traefik.http.routers.grandivo-products.tls=true"
         - "traefik.http.routers.grandivo-products.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
         - "traefik.http.routers.grandivo-products.service=grandivo-products"
+        - "traefik.http.routers.grandivo-products-http.rule=Host(`${DASHBOARD_HOST:-dbo.grandivo.cloud}`)"
+        - "traefik.http.routers.grandivo-products-http.entrypoints=http"
+        - "traefik.http.routers.grandivo-products-http.service=grandivo-products"
         - "traefik.http.services.grandivo-products.loadbalancer.server.port=8080"
         - "traefik.swarm.network=easypanel"
 
