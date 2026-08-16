@@ -45,7 +45,7 @@ services:
           memory: 128M
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.grandivo-products.rule=Host(`${DASHBOARD_HOST:-products.grandivo.cloud}`)"
+        - "traefik.http.routers.grandivo-products.rule=Host(`${DASHBOARD_HOST:-dbo.grandivo.cloud}`)"
         - "traefik.http.routers.grandivo-products.entrypoints=${TRAEFIK_ENTRYPOINT:-https}"
         - "traefik.http.routers.grandivo-products.tls=true"
         - "traefik.http.routers.grandivo-products.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"

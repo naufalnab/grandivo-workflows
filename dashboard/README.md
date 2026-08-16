@@ -95,7 +95,7 @@ Jangan commit hash/password aktual ke repository.
 Tambahkan A record:
 
 ```text
-products.grandivo.cloud → 187.127.105.183
+dbo.grandivo.cloud → 187.127.105.183
 ```
 
 Nama host dapat diganti melalui environment `DASHBOARD_HOST`.
@@ -113,7 +113,7 @@ stack-product-dashboard.yml
 Environment variables:
 
 ```text
-DASHBOARD_HOST=products.grandivo.cloud
+DASHBOARD_HOST=dbo.grandivo.cloud
 PGRST_DB_URI=postgres://grandivo_dashboard:PASSWORD_RANDOM_DARI_OPENSSL@grandivo-db_postgres:5432/grandivo
 ```
 
@@ -143,7 +143,7 @@ Setelah deploy, service yang diharapkan:
 Buka:
 
 ```text
-https://products.grandivo.cloud
+https://dbo.grandivo.cloud
 ```
 
 Browser akan meminta username/password Basic Auth yang dibuat pada langkah 2.
